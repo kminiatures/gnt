@@ -12,6 +12,16 @@ PHP 8.2+を使用したLaravel 12アプリケーションで、以下の主要�
 - 開発ツール: Laravel Pint（コードフォーマット）、Laravel Pail（ログ監視）
 - Laravel Sail経由でのDockerサポート
 
+## 初回セットアップ
+
+新しい開発環境での初回セットアップ手順：
+1. `composer install` - PHP依存関係をインストール
+2. `npm install` - フロントエンド依存関係をインストール
+3. `.env.example`を`.env`にコピーし、必要に応じて設定を調整
+4. `php artisan key:generate` - アプリケーションキーを生成
+5. `php artisan migrate` - データベーステーブルを作成
+6. `php artisan db:seed` - 初期データを投入（オプション）
+
 ## 開発コマンド
 
 ### 基本的なLaravelコマンド
@@ -43,6 +53,21 @@ PHP 8.2+を使用したLaravel 12アプリケーションで、以下の主要�
 - `./vendor/bin/sail down` - Docker環境を停止
 - `./vendor/bin/sail artisan [command]` - コンテナ内でartisanコマンドを実行
 
+### デバッグとトラブルシューティング
+- `php artisan route:list` - 全ルートを表示
+- `php artisan config:cache` - 設定をキャッシュ（本番環境向け）
+- `php artisan view:clear` - ビューキャッシュをクリア
+- `php artisan cache:clear` - アプリケーションキャッシュをクリア
+- `php artisan optimize:clear` - 全キャッシュをクリア
+- `php artisan pail` - リアルタイムログ監視
+- `php artisan about` - アプリケーション情報を表示
+
+### パフォーマンス最適化
+- `php artisan optimize` - 本番環境向け最適化
+- `php artisan route:cache` - ルートをキャッシュ
+- `php artisan event:cache` - イベントをキャッシュ
+- `composer dump-autoload --optimize` - オートローダーを最適化
+
 ## アーキテクチャ
 
 ### ディレクトリ構造
@@ -62,3 +87,16 @@ ViteがTailwindCSSとLaravel統合で`resources/css/app.css`と`resources/js/app
 
 ### テスト環境
 PHPUnitは、テスト時に分離されたテストデータベースとキャッシュ/セッション/メール用の配列ベースドライバーで設定されています。
+
+### 環境設定
+- `.env` - 環境変数設定（ローカル開発用、Gitで管理されない）
+- `.env.example` - 環境変数のテンプレート
+- デフォルトでSQLiteを使用、MariaDBへの切り替えはDocker Composeで可能
+- `APP_KEY`は`php artisan key:generate`で生成必須
+- ログレベルはLOG_LEVELで調整可能（debug, info, notice, warning, error）
+
+### 重要な開発ワークフロー
+1. 新機能開発時：マイグレーション作成 → モデル/コントローラー作成 → ルート定義 → テスト作成
+2. フロントエンド変更時：`npm run dev`でホットリロード開発
+3. 本番デプロイ前：`composer test`でテスト実行 → `vendor/bin/pint`でコード整形
+4. Docker使用時：`./vendor/bin/sail`プレフィックスを全コマンドに追加
