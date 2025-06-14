@@ -39,6 +39,18 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     Dashboard
                                 </NavLink>
+                                <NavLink
+                                    :href="route('projects.index')"
+                                    :active="route().current('projects.*')"
+                                >
+                                    プロジェクト
+                                </NavLink>
+                                <NavLink
+                                    :href="route('gantt')"
+                                    :active="route().current('gantt')"
+                                >
+                                    ガントチャート
+                                </NavLink>
                             </div>
                         </div>
 
@@ -52,7 +64,6 @@ const showingNavigationDropdown = ref(false);
                                                 type="button"
                                                 class="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
                                             >
-                                                auth {{ $page.props.auth }}
                                                 {{ $page.props.auth?.user?.name || 'Guest' }}
 
                                                 <svg
@@ -146,6 +157,18 @@ const showingNavigationDropdown = ref(false);
                             :active="route().current('dashboard')"
                         >
                             Dashboard
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('projects.index')"
+                            :active="route().current('projects.*')"
+                        >
+                            プロジェクト
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('gantt')"
+                            :active="route().current('gantt')"
+                        >
+                            ガントチャート
                         </ResponsiveNavLink>
                     </div>
 

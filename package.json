@@ -27,5 +27,8 @@
         "tailwindcss": "^3.2.1",
         "vite": "^6.2.4",
         "vue": "^3.4.0"
+    },
+    "dependencies": {
+        "@syncfusion/ej2-vue-gantt": "^29.2.10"
     }
 }

@@ -4,13 +4,36 @@
 
 ## プロジェクト概要
 
+プロジェクト名は gnt です。
+ガントチャート画面をメインとして以下のような機能を盛り込む予定です。
+
+- ガントチャート画面
+    - タスクの追加・更新・削除・移動
+- アサイン状況画面
+    - ユーザーのアサイン状況をプロジェクトを横断して表示可能
+- プロジェクトとユーザー画面
+    - 複数のプロジェクトが追加可能
+    - ユーザーは複数のプロジェクトに参加できる
+
 PHP 8.2+を使用したLaravel 12アプリケーションで、以下の主要技術を使用しています：
-- Laravel Framework (^12.0) とArtisan CLI
-- フロントエンド: Vite + TailwindCSS 4.0
+
+$page.props.auth- フロントエンド: Vite + TailwindCSS 4.0
 - データベース: SQLite（デフォルト）、Docker経由でMariaDBサポート
 - テスト: FeatureテストとUnitテストスイートを持つPHPUnit
 - 開発ツール: Laravel Pint（コードフォーマット）、Laravel Pail（ログ監視）
 - Laravel Sail経由でのDockerサポート
+- breeze + Vuejs を使っています。
+- @syncfusion/ej2-vue-gantt でガントチャートを描画します。
+
+## 代表的な URL は以下のようなもの
+
+- /projects : プロジェクト一覧
+- /projects/{project_key} : プロジェクト詳細
+- /projects/{project_key}/gantt : プロジェクトのガントチャート
+- /users : ユーザー一覧
+- /users/{user_id} : ユーザー詳細
+- /groups : ユーザーグループ一覧
+- /groups/{group_key} : ユーザーグループ詳細
 
 ## 初回セットアップ
 
