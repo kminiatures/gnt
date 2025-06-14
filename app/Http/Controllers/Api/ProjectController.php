@@ -25,6 +25,10 @@ class ProjectController extends Controller
             $query->byOwner($request->owner_id);
         }
 
+        if ($request->has('project_key')) {
+            $query->where('project_key', $request->project_key);
+        }
+
         // ソート
         $sortBy = $request->get('sort_by', 'created_at');
         $sortOrder = $request->get('sort_order', 'desc');

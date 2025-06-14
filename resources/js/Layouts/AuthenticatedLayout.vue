@@ -45,12 +45,6 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     プロジェクト
                                 </NavLink>
-                                <NavLink
-                                    :href="route('gantt')"
-                                    :active="route().current('gantt')"
-                                >
-                                    ガントチャート
-                                </NavLink>
                             </div>
                         </div>
 
@@ -163,12 +157,6 @@ const showingNavigationDropdown = ref(false);
                             :active="route().current('projects.*')"
                         >
                             プロジェクト
-                        </ResponsiveNavLink>
-                        <ResponsiveNavLink
-                            :href="route('gantt')"
-                            :active="route().current('gantt')"
-                        >
-                            ガントチャート
                         </ResponsiveNavLink>
                     </div>
 

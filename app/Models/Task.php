@@ -155,10 +155,10 @@ class Task extends Model
         return [
             'TaskID' => $this->id,
             'TaskName' => $this->name,
-            'StartDate' => $this->start_date?->format('Y-m-d'),
-            'EndDate' => $this->end_date?->format('Y-m-d'),
+            'StartDate' => $this->start_date?->format('Y-m-d\TH:i:s'),
+            'EndDate' => $this->end_date?->format('Y-m-d\TH:i:s'),
             'Duration' => $this->calculateDuration(),
-            'Progress' => $this->progress,
+            'Progress' => $this->progress ?? 0,
             'Predecessor' => $this->predecessor,
             'subtasks' => $this->children->map(fn($child) => $child->toGanttFormat())->toArray(),
         ];

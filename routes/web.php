@@ -18,9 +18,6 @@ Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::get('/gantt', function () {
-    return Inertia::render('Gantt');
-})->middleware(['auth', 'verified'])->name('gantt');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -30,12 +27,12 @@ Route::middleware('auth')->group(function () {
     // Projects routes
     Route::get('/projects', [\App\Http\Controllers\Api\ProjectController::class, 'indexPage'])->name('projects.index');
     
-    Route::get('/projects/{project}', function ($project) {
-        return Inertia::render('Projects/Show', ['projectId' => $project]);
+    Route::get('/projects/{project_key}', function ($project_key) {
+        return Inertia::render('Projects/Show', ['projectKey' => $project_key]);
     })->name('projects.show');
     
-    Route::get('/projects/{project}/gantt', function ($project) {
-        return Inertia::render('Projects/Gantt', ['projectId' => $project]);
+    Route::get('/projects/{project_key}/gantt', function ($project_key) {
+        return Inertia::render('Projects/Gantt', ['projectKey' => $project_key]);
     })->name('projects.gantt');
 });
 

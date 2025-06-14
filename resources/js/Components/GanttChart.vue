@@ -2,7 +2,7 @@
   <div class="gantt-container">
     <GanttComponent
       ref="gantt"
-      :dataSource="data"
+      :dataSource="processedData"
       :taskFields="taskFields"
       :editSettings="editSettings"
       :toolbar="toolbar"
@@ -13,20 +13,24 @@
       height="500px"
       :allowSelection="true"
       :allowSorting="true"
+      :allowFiltering="true"
       :allowReordering="true"
       :allowResizing="true"
       :highlightWeekends="true"
       :gridLines="'Both'"
       :splitterSettings="splitterSettings"
-      :provide="ganttServices"
+      :enableContextMenu="true"
+      :enableVirtualization="false"
+      :provide="{ gantt: ganttServices }"
     >
     </GanttComponent>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, provide } from 'vue'
-import { GanttComponent, Edit, Toolbar, Selection, Sort, Reorder, Resize } from '@syncfusion/ej2-vue-gantt'
+import { ref, onMounted, watch } from 'vue'
+import { GanttComponent } from '@syncfusion/ej2-vue-gantt'
+import { Gantt } from '@syncfusion/ej2-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -35,18 +39,84 @@ if (syncfusionLicense) {
   registerLicense(syncfusionLicense)
 }
 
+// Import and register all Gantt services
+import { 
+  Edit, 
+  Toolbar, 
+  Selection, 
+  Sort, 
+  Reorder, 
+  Resize, 
+  Filter, 
+  ExcelExport, 
+  PdfExport, 
+  DayMarkers,
+  ContextMenu,
+  CriticalPath,
+  VirtualScroll
+} from '@syncfusion/ej2-gantt'
+
+// Register Gantt services globally
+Gantt.Inject(
+  Edit, 
+  Toolbar, 
+  Selection, 
+  Sort, 
+  Reorder, 
+  Resize, 
+  Filter, 
+  ExcelExport, 
+  PdfExport, 
+  DayMarkers,
+  ContextMenu,
+  CriticalPath,
+  VirtualScroll
+)
+
 // Define Gantt services for injection
-const ganttServices = {
-  gantt: [Edit, Toolbar, Selection, Sort, Reorder, Resize]
-}
+const ganttServices = [
+  Edit, 
+  Toolbar, 
+  Selection, 
+  Sort, 
+  Reorder, 
+  Resize, 
+  Filter, 
+  ExcelExport, 
+  PdfExport, 
+  DayMarkers,
+  ContextMenu,
+  CriticalPath,
+  VirtualScroll
+]
 
 // Props
-defineProps({
+const props = defineProps({
   data: {
     type: Array,
     default: () => []
   }
 })
+
+// データを処理してDateオブジェクトに変換
+const processedData = ref([])
+
+const processGanttData = (data) => {
+  return data.map(item => {
+    const processedItem = {
+      ...item,
+      StartDate: item.StartDate ? new Date(item.StartDate) : null,
+      EndDate: item.EndDate ? new Date(item.EndDate) : null,
+      Progress: item.Progress || 0
+    }
+    
+    if (item.subtasks && item.subtasks.length > 0) {
+      processedItem.subtasks = processGanttData(item.subtasks)
+    }
+    
+    return processedItem
+  })
+}
 
 // Gantt configuration
 const gantt = ref(null)
@@ -95,17 +165,59 @@ const timelineSettings = {
   }
 }
 
-const projectStartDate = new Date('2024-01-01')
-const projectEndDate = new Date('2024-12-31')
+const projectStartDate = ref(new Date('2024-01-01'))
+const projectEndDate = ref(new Date('2024-12-31'))
+
+// プロジェクトの日付範囲を動的に設定
+const updateProjectDates = (data) => {
+  let minDate = null
+  let maxDate = null
+  
+  const findDates = (items) => {
+    items.forEach(item => {
+      if (item.StartDate) {
+        const startDate = new Date(item.StartDate)
+        if (!minDate || startDate < minDate) minDate = startDate
+      }
+      if (item.EndDate) {
+        const endDate = new Date(item.EndDate)
+        if (!maxDate || endDate > maxDate) maxDate = endDate
+      }
+      if (item.subtasks && item.subtasks.length > 0) {
+        findDates(item.subtasks)
+      }
+    })
+  }
+  
+  findDates(data)
+  
+  if (minDate) projectStartDate.value = minDate
+  if (maxDate) projectEndDate.value = maxDate
+}
 
 const splitterSettings = {
   columnIndex: 3
 }
 
+// Day markers configuration (optional)
+const dayWorkingTime = [
+  { from: 8, to: 12 },
+  { from: 13, to: 17 }
+]
+
+const weekWorkingDays = [1, 2, 3, 4, 5] // Monday to Friday
+
 // Gantt modules are provided via the provide() function above
+
+// プロパティの変更を監視してデータを更新
+watch(() => props.data, (newData) => {
+  processedData.value = processGanttData(newData)
+  updateProjectDates(newData)
+}, { immediate: true })
 
 onMounted(() => {
   console.log('Gantt Chart component mounted')
+  processedData.value = processGanttData(props.data)
 })
 </script>
 

@@ -20,7 +20,7 @@ Route::middleware('auth:sanctum')->prefix('projects')->group(function () {
 });
 
 // Projects API (Web認証 - Inertia.jsのフロントエンドから使用)
-Route::middleware('auth:web')->prefix('projects')->name('api.projects.')->group(function () {
+Route::middleware(['web', 'auth'])->prefix('projects')->name('api.projects.')->group(function () {
     Route::get('/', [ProjectController::class, 'index'])->name('index');
     Route::post('/', [ProjectController::class, 'store'])->name('store');
     Route::get('/{project}', [ProjectController::class, 'show'])->name('show');
@@ -42,7 +42,7 @@ Route::middleware('auth:sanctum')->prefix('tasks')->group(function () {
 });
 
 // Tasks API (Web認証 - Inertia.jsのフロントエンドから使用)
-Route::middleware('auth:web')->prefix('tasks')->name('api.tasks.')->group(function () {
+Route::middleware(['web', 'auth'])->prefix('tasks')->name('api.tasks.')->group(function () {
     Route::get('/', [TaskController::class, 'index'])->name('index');
     Route::post('/', [TaskController::class, 'store'])->name('store');
     Route::get('/{task}', [TaskController::class, 'show'])->name('show');

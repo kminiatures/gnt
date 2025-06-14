@@ -41,12 +41,12 @@ const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('ja-JP');
 };
 
-const navigateToProject = (projectId) => {
-    router.visit(`/projects/${projectId}`);
+const navigateToProject = (project) => {
+    router.visit(`/projects/${project.project_key}`);
 };
 
-const navigateToGantt = (projectId) => {
-    router.visit(`/projects/${projectId}/gantt`);
+const navigateToGantt = (project) => {
+    router.visit(`/projects/${project.project_key}/gantt`);
 };
 </script>
 
@@ -124,11 +124,14 @@ const navigateToGantt = (projectId) => {
                                     v-for="project in projects" 
                                     :key="project.id"
                                     class="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                    @click="navigateToProject(project.id)"
+                                    @click="navigateToProject(project)"
                                 >
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                             {{ project.name }}
+                                        </div>
+                                        <div class="text-xs text-blue-600 dark:text-blue-400 font-mono mb-1">
+                                            {{ project.project_key }}
                                         </div>
                                         <div v-if="project.description" class="text-sm text-gray-500 dark:text-gray-400 truncate max-w-xs">
                                             {{ project.description }}
@@ -166,13 +169,13 @@ const navigateToGantt = (projectId) => {
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                                         <button
-                                            @click.stop="navigateToProject(project.id)"
+                                            @click.stop="navigateToProject(project)"
                                             class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                         >
                                             詳細
                                         </button>
                                         <button
-                                            @click.stop="navigateToGantt(project.id)"
+                                            @click.stop="navigateToGantt(project)"
                                             class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
                                         >
                                             ガント
