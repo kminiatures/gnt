@@ -1,0 +1,25 @@
+<template>
+  <AuthenticatedLayout>
+    <template #header>
+      <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        Gantt Chart Test
+      </h2>
+    </template>
+
+    <div class="py-12">
+      <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+          <div class="p-6 text-gray-900">
+            <h3 class="text-lg font-medium mb-4">Syncfusion Gantt Test Component</h3>
+            <GanttTest />
+          </div>
+        </div>
+      </div>
+    </div>
+  </AuthenticatedLayout>
+</template>
+
+<script setup>
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+import GanttTest from '@/Components/GanttTest.vue'
+</script>

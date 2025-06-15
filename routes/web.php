@@ -34,6 +34,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects/{project_key}/gantt', function ($project_key) {
         return Inertia::render('Projects/Gantt', ['projectKey' => $project_key]);
     })->name('projects.gantt');
+    
+    // Gantt Test Route
+    Route::get('/gantt-test', function () {
+        return Inertia::render('GanttTest');
+    })->name('gantt.test');
 });
 
 require __DIR__.'/auth.php';
