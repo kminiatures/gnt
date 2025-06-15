@@ -6,17 +6,21 @@
       :dataSource="processedData"
       :taskFields="taskFields"
       :editSettings="editSettings"
+      :toolbar="toolbar"
+      :allowRowDragAndDrop="true"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
       @actionComplete="onActionComplete"
+      @actionBegin="onActionBegin"
+      @rowDrop="onRowDrop"
     >
     </ejs-gantt>
   </div>
 </template>
 
 <script>
-import { GanttComponent, Edit } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -37,6 +41,10 @@ export default {
     data: {
       type: Array,
       default: () => []
+    },
+    projectId: {
+      type: [Number, String],
+      required: false
     }
   },
   data() {
@@ -54,12 +62,18 @@ export default {
         parentID: 'ParentID'
       },
       editSettings: {
-        allowTaskbarEditing: true
-      }
+        allowTaskbarEditing: true,
+        allowAdding: true,
+        allowEditing: true,
+        allowDeleting: true,
+        allowDragAndDrop: true,
+        mode: 'Auto'
+      },
+      toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel']
     }
   },
   provide: {
-    gantt: [Edit]
+    gantt: [Edit, Toolbar, Selection, RowDD]
   },
   watch: {
     data: {
@@ -108,6 +122,21 @@ export default {
     onTaskbarEdited(args) {
       console.log('Taskbar edited:', args)
     },
+    onActionBegin(args) {
+      console.log('Action begin:', args)
+      
+      // タスク追加の場合、一旦キャンセルしてAPIで作成後に反映
+      if (args.requestType === 'beforeAdd') {
+        args.cancel = true
+        this.createTask(args.data)
+      }
+      
+      // タスク削除の場合
+      if (args.requestType === 'beforeDelete') {
+        args.cancel = true
+        this.deleteTask(args.data[0])
+      }
+    },
     async onActionComplete(args) {
       console.log('Action complete:', args)
       console.log('Request type:', args.requestType)
@@ -148,6 +177,232 @@ export default {
           console.error('Error updating task dates:', error)
         }
       }
+    },
+    async createTask(taskData) {
+      console.log('Creating new task:', taskData)
+      
+      if (!this.projectId) {
+        console.error('Project ID is required for creating tasks')
+        return
+      }
+
+      // デフォルト値を設定
+      const newTaskData = {
+        project_id: this.projectId,
+        name: taskData.TaskName || 'New Task',
+        start_date: taskData.StartDate ? taskData.StartDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        end_date: taskData.EndDate ? taskData.EndDate.toISOString().split('T')[0] : new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0],
+        progress: taskData.Progress || 0,
+        status: 'not_started',
+        parent_id: taskData.ParentID || null
+      }
+
+      try {
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(newTaskData),
+        })
+
+        if (response.ok) {
+          const createdTask = await response.json()
+          console.log('Task created successfully:', createdTask)
+          
+          // ガントチャートのデータを更新
+          this.refreshGanttData()
+        } else {
+          console.error('Failed to create task:', response.status)
+          const errorData = await response.json()
+          console.error('Error details:', errorData)
+        }
+      } catch (error) {
+        console.error('Error creating task:', error)
+      }
+    },
+    async deleteTask(taskData) {
+      console.log('Deleting task:', taskData)
+
+      try {
+        const response = await fetch(`/api/tasks/${taskData.TaskID}`, {
+          method: 'DELETE',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        })
+
+        if (response.ok) {
+          console.log('Task deleted successfully')
+          
+          // ガントチャートのデータを更新
+          this.refreshGanttData()
+        } else {
+          console.error('Failed to delete task:', response.status)
+        }
+      } catch (error) {
+        console.error('Error deleting task:', error)
+      }
+    },
+    refreshGanttData() {
+      // 親コンポーネントにデータの再読み込みを要求
+      this.$emit('refresh-data')
+    },
+    async onRowDrop(args) {
+      console.log('Row drop event:', args)
+      
+      // ドロップされたタスクの情報を取得
+      const droppedTask = args.data[0] // ドラッグされたタスク
+      const targetTask = args.dropRecord // ドロップ先のタスク
+      const dropPosition = args.dropPosition // 'topSegment', 'bottomSegment', または 'child'
+      
+      console.log('Dropped task:', droppedTask)
+      console.log('Target task:', targetTask)
+      console.log('Drop position:', dropPosition)
+      
+      // 自分自身にドロップしようとした場合は無視
+      if (droppedTask.TaskID === targetTask?.TaskID) {
+        console.log('Cannot drop task onto itself')
+        return
+      }
+      
+      // 子タスクを親タスクにドロップしようとした場合は無視（循環参照防止）
+      if (this.isDescendant(targetTask, droppedTask)) {
+        console.log('Cannot drop parent task into its own descendant')
+        return
+      }
+      
+      // API呼び出しでタスクの並び順を更新
+      await this.updateTaskOrder(droppedTask, targetTask, dropPosition)
+    },
+    async updateTaskOrder(droppedTask, targetTask, dropPosition) {
+      try {
+        let newParentId = null
+        let newSortOrder = 1
+        
+        console.log(`Moving task "${droppedTask.TaskName}" to ${dropPosition} of "${targetTask?.TaskName || 'root'}"`)
+        
+        // ドロップ位置に応じて親IDと並び順を決定
+        if (dropPosition === 'child' && targetTask) {
+          // 子タスクとして追加（グループの下に移動）
+          newParentId = targetTask.TaskID
+          newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
+          console.log(`Setting as child of task ${targetTask.TaskID} with sort order ${newSortOrder}`)
+          
+        } else if (targetTask) {
+          // 同レベルに挿入
+          newParentId = targetTask.ParentID || null
+          
+          if (dropPosition === 'topSegment') {
+            // ターゲットの上に挿入
+            newSortOrder = Math.max(1, (targetTask.sort_order || 1) - 0.5)
+            console.log(`Inserting above task ${targetTask.TaskID} with sort order ${newSortOrder}`)
+          } else {
+            // ターゲットの下に挿入
+            newSortOrder = (targetTask.sort_order || 1) + 0.5
+            console.log(`Inserting below task ${targetTask.TaskID} with sort order ${newSortOrder}`)
+          }
+        } else {
+          // ルートレベルに移動
+          newParentId = null
+          newSortOrder = this.getNextRootSortOrder()
+          console.log(`Moving to root level with sort order ${newSortOrder}`)
+        }
+        
+        // APIでタスクを更新
+        const updateData = {
+          parent_id: newParentId,
+          sort_order: Math.round(newSortOrder * 10) / 10 // 小数点第1位まで
+        }
+        
+        console.log('Sending update:', updateData)
+        
+        const response = await fetch(`/api/tasks/${droppedTask.TaskID}`, {
+          method: 'PUT',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(updateData),
+        })
+        
+        if (response.ok) {
+          console.log('Task order updated successfully')
+          
+          // ガントチャートのデータを更新
+          setTimeout(() => {
+            this.refreshGanttData()
+          }, 100) // 少し遅延させてUI更新を確実にする
+        } else {
+          console.error('Failed to update task order:', response.status)
+          const errorData = await response.json()
+          console.error('Error details:', errorData)
+        }
+      } catch (error) {
+        console.error('Error updating task order:', error)
+      }
+    },
+    
+    // 循環参照チェック：targetTaskがdroppedTaskの子孫かどうか
+    isDescendant(targetTask, droppedTask) {
+      if (!targetTask || !droppedTask) return false
+      
+      // 現在のデータから子孫関係をチェック
+      const checkDescendants = (task, ancestorId) => {
+        if (task.TaskID === ancestorId) return true
+        
+        // 子タスクを再帰的にチェック
+        if (task.subtasks && task.subtasks.length > 0) {
+          return task.subtasks.some(child => checkDescendants(child, ancestorId))
+        }
+        
+        return false
+      }
+      
+      return this.processedData.some(rootTask => 
+        checkDescendants(rootTask, droppedTask.TaskID) && 
+        checkDescendants(rootTask, targetTask.TaskID)
+      )
+    },
+    
+    // 特定の親タスクの子タスクの次のsort_orderを取得
+    getNextChildSortOrder(parentId) {
+      let maxOrder = 0
+      
+      const findChildMaxOrder = (tasks) => {
+        tasks.forEach(task => {
+          if (task.ParentID === parentId) {
+            maxOrder = Math.max(maxOrder, task.sort_order || 0)
+          }
+          if (task.subtasks && task.subtasks.length > 0) {
+            findChildMaxOrder(task.subtasks)
+          }
+        })
+      }
+      
+      findChildMaxOrder(this.processedData)
+      return maxOrder + 1
+    },
+    
+    // ルートレベルタスクの次のsort_orderを取得
+    getNextRootSortOrder() {
+      let maxOrder = 0
+      
+      this.processedData.forEach(task => {
+        if (!task.ParentID) {
+          maxOrder = Math.max(maxOrder, task.sort_order || 0)
+        }
+      })
+      
+      return maxOrder + 1
     }
   },
   mounted() {
@@ -185,7 +440,6 @@ export default {
 }
 
 /* Syncfusionのスタイルをカスタマイズ */
-/*
 :deep(.e-gantt) {
   font-family: 'Figtree', sans-serif;
 }
@@ -197,7 +451,59 @@ export default {
 :deep(.e-gantt .e-timeline-header-container) {
   background: #f8fafc;
 }
-*/
+
+/* 行ドラッグ&ドロップのスタイル */
+:deep(.e-gantt .e-dragclone) {
+  background: #e3f2fd;
+  border: 1px solid #2196f3;
+  opacity: 0.8;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+:deep(.e-gantt .e-droparea) {
+  background: #e8f5e8;
+  border: 2px dashed #4caf50;
+}
+
+/* 子タスクとしてドロップする際のハイライト */
+:deep(.e-gantt .e-childposition) {
+  background: #fff3e0 !important;
+  border-left: 3px solid #ff9800;
+}
+
+/* 上下に挿入する際のハイライト */
+:deep(.e-gantt .e-topposition) {
+  border-top: 2px solid #2196f3;
+  background: #e3f2fd;
+}
+
+:deep(.e-gantt .e-bottomposition) {
+  border-bottom: 2px solid #2196f3;
+  background: #e3f2fd;
+}
+
+:deep(.e-gantt .e-row-dragicon) {
+  color: #666;
+  cursor: grab;
+}
+
+:deep(.e-gantt .e-row-dragicon:hover) {
+  color: #2196f3;
+  cursor: grabbing;
+}
+
+/* グループタスクのインデント表示を強調 */
+:deep(.e-gantt .e-treegridexpand),
+:deep(.e-gantt .e-treegridcollapse) {
+  color: #2196f3;
+  font-weight: bold;
+}
+
+/* 親タスクの行を少し強調 */
+:deep(.e-gantt .e-summarytaskbar) {
+  background: #f5f5f5;
+  border-left: 3px solid #2196f3;
+}
 
 /* タスクバーのドラッグ可能スタイル */
 /*

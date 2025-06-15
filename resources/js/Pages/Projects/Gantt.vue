@@ -152,17 +152,19 @@ onMounted(() => {
                         </div>
                         
                         <!-- ガントチャート表示 -->
-                        <div v-if="ganttData.length > 0">
-                            <GanttChart :data="ganttData" />
-                        </div>
+                        <GanttChart 
+                            :data="ganttData" 
+                            :projectId="project.id"
+                            @refresh-data="fetchProjectData"
+                        />
                         
                         <!-- タスクがない場合のメッセージ -->
-                        <div v-else class="text-center py-8">
-                            <div class="text-gray-500 dark:text-gray-400 mb-4">
+                        <div v-if="ganttData.length === 0" class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                            <div class="text-blue-700 dark:text-blue-300 mb-2">
                                 このプロジェクトにはまだタスクがありません
                             </div>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                プロジェクト詳細ページでタスクを追加してください
+                            <p class="text-sm text-blue-600 dark:text-blue-400">
+                                上のツールバーの「Add」ボタンでタスクを追加してください
                             </p>
                         </div>
                         
@@ -170,9 +172,12 @@ onMounted(() => {
                             <p><strong>操作方法:</strong></p>
                             <ul class="list-disc list-inside mt-2 space-y-1">
                                 <li>タスクバーをドラッグして期間を調整</li>
+                                <li>左側のタスク行をドラッグして並び順を変更</li>
+                                <li>タスクを他のタスクの中央にドロップしてグループの下に移動</li>
+                                <li>タスクを他のタスクの上下端にドロップして同レベルに挿入</li>
                                 <li>ツールバーの「Add」でタスクを追加</li>
                                 <li>タスクを選択して「Edit」で詳細編集</li>
-                                <li>「ZoomIn/ZoomOut」で表示倍率を調整</li>
+                                <li>「Delete」でタスクを削除</li>
                             </ul>
                         </div>
                     </div>
