@@ -248,26 +248,17 @@ export default {
     data: {
       immediate: true,
       handler(newData) {
-        console.log('Data watcher triggered with:', newData)
         if (newData && newData.length > 0) {
-          console.log('Processing gantt data...')
           this.processedData = this.processGanttData(newData)
-          console.log('Processed gantt data:', this.processedData)
-        } else {
-          console.log('No data to process')
         }
       }
     },
     labelSettings: {
       deep: true,
       handler(newLabelSettings) {
-        console.log('Label settings changed:', newLabelSettings)
-        
         // ラベル設定変更時にもデータを再処理
         if (this.data && this.data.length > 0) {
-          console.log('Re-processing data due to label change...')
           this.processedData = this.processGanttData(this.data)
-          console.log('Re-processed data:', this.processedData)
         }
         
         this.updateLabelsPreservingZoom()
@@ -312,20 +303,14 @@ export default {
           processedItem.subtasks = this.processGanttData(item.subtasks)
         }
         
-        console.log('Processed item:', processedItem) // デバッグ用
-        console.log('StartDateFormatted:', processedItem.StartDateFormatted)
-        console.log('EndDateFormatted:', processedItem.EndDateFormatted)
         return processedItem
       })
     },
     onTaskbarEditing(args) {
-      console.log('Taskbar editing:', args)
     },
     onTaskbarEdited(args) {
-      console.log('Taskbar edited:', args)
     },
     onActionBegin(args) {
-      console.log('Action begin:', args)
       
       // タスク追加の場合、一旦キャンセルしてAPIで作成後に反映
       if (args.requestType === 'beforeAdd') {
@@ -340,9 +325,10 @@ export default {
       }
     },
     async onActionComplete(args) {
-      console.log('Action complete:', args)
-      console.log('Request type:', args.requestType)
-      console.log('Task bar edit action:', args.taskBarEditAction)
+      // ドラッグ操作のデバッグのみ
+      if (args.requestType === 'rowDropped') {
+        console.log('Row drop completed:', args)
+      }
       
       // タスクバーの編集（リサイズ、移動）時にAPIを呼び出す
       if (args.requestType === 'save' && (
@@ -353,16 +339,9 @@ export default {
         args.taskBarEditAction === 'ChildDrag'
       )) {
         const task = args.data
-        console.log('Updating task dates:', task)
-        console.log('StartDate (original):', task.StartDate)
-        console.log('EndDate (original):', task.EndDate)
-        console.log('StartDate (formatted):', task.StartDate ? this.formatDateToLocal(task.StartDate) : null)
-        console.log('EndDate (formatted):', task.EndDate ? this.formatDateToLocal(task.EndDate) : null)
-        console.log('Duration:', task.Duration)
         
         // 終了日のドラッグかどうかを判定
         const isEndDateResize = args.taskBarEditAction === 'RightResizing'
-        console.log('Is end date resize:', isEndDateResize)
         
         // API呼び出しを先に行い、成功後にラベルを更新
         try {
@@ -382,14 +361,12 @@ export default {
           
           if (response.ok) {
             const result = await response.json()
-            console.log('Task dates updated successfully', result)
             
             // API成功後に子タスクのラベルを更新
             this.updateTaskDateLabels(task)
             
             // 終了日のドラッグの場合、特別な処理でバー位置を保持
             if (isEndDateResize) {
-              console.log('End date resize detected - preserving bar position')
               
               // processedData内のタスクを即座に更新
               this.updateTaskInProcessedData({
@@ -406,7 +383,6 @@ export default {
             
             // 更新された親タスクがある場合のみ、スムーズに部分更新
             if (result.updated_parents && result.updated_parents.length > 0) {
-              console.log('Parent tasks updated by API:', result.updated_parents)
               
               // 終了日のドラッグの場合はより慎重に親タスクを更新
               if (isEndDateResize) {
@@ -418,8 +394,6 @@ export default {
                 // 親タスクのみを効率的に更新（子タスクの位置を保持）
                 this.updateParentTasksFromAPI(result.updated_parents, false)
               }
-            } else {
-              console.log('No parent tasks to update - child task position preserved')
             }
           } else {
             console.error('Failed to update task dates:', response.status)
@@ -430,7 +404,6 @@ export default {
       }
     },
     async createTask(taskData) {
-      console.log('Creating new task:', taskData)
       
       if (!this.projectId) {
         console.error('Project ID is required for creating tasks')
@@ -506,26 +479,20 @@ export default {
       this.$emit('refresh-data')
     },
     async onRowDrop(args) {
-      console.log('Row drop event:', args)
-      
       // ドロップされたタスクの情報を取得
       const droppedTask = args.data[0] // ドラッグされたタスク
       const targetTask = args.dropRecord // ドロップ先のタスク
       const dropPosition = args.dropPosition // 'topSegment', 'bottomSegment', または 'child'
       
-      console.log('Dropped task:', droppedTask)
-      console.log('Target task:', targetTask)
-      console.log('Drop position:', dropPosition)
+      console.log(`Drop: "${droppedTask.TaskName}" to ${dropPosition} of "${targetTask?.TaskName || 'root'}"`)
       
       // 自分自身にドロップしようとした場合は無視
       if (droppedTask.TaskID === targetTask?.TaskID) {
-        console.log('Cannot drop task onto itself')
         return
       }
       
       // 子タスクを親タスクにドロップしようとした場合は無視（循環参照防止）
       if (this.isDescendant(targetTask, droppedTask)) {
-        console.log('Cannot drop parent task into its own descendant')
         return
       }
       
@@ -537,14 +504,16 @@ export default {
         let newParentId = null
         let newSortOrder = 1
         
-        console.log(`Moving task "${droppedTask.TaskName}" to ${dropPosition} of "${targetTask?.TaskName || 'root'}"`)
-        
         // ドロップ位置に応じて親IDと並び順を決定
         if (dropPosition === 'child' && targetTask) {
           // 子タスクとして追加（グループの下に移動）
           newParentId = targetTask.TaskID
           newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
-          console.log(`Setting as child of task ${targetTask.TaskID} with sort order ${newSortOrder}`)
+          
+        } else if (dropPosition === 'middleSegment' && targetTask && this.hasChildren(targetTask)) {
+          // middleSegmentでもターゲットが親タスク（子タスクを持つ）の場合は子タスクとして扱う
+          newParentId = targetTask.TaskID
+          newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
           
         } else if (targetTask) {
           // 同レベルに挿入
@@ -553,18 +522,18 @@ export default {
           if (dropPosition === 'topSegment') {
             // ターゲットの上に挿入
             newSortOrder = Math.max(1, (targetTask.sort_order || 1) - 0.5)
-            console.log(`Inserting above task ${targetTask.TaskID} with sort order ${newSortOrder}`)
           } else {
-            // ターゲットの下に挿入
+            // ターゲットの下に挿入（bottomSegmentまたはmiddleSegment）
             newSortOrder = (targetTask.sort_order || 1) + 0.5
-            console.log(`Inserting below task ${targetTask.TaskID} with sort order ${newSortOrder}`)
           }
         } else {
           // ルートレベルに移動
           newParentId = null
           newSortOrder = this.getNextRootSortOrder()
-          console.log(`Moving to root level with sort order ${newSortOrder}`)
         }
+        
+        // 元の親タスクのIDを保存（親タスクの日付更新用）
+        const oldParentId = droppedTask.ParentID
         
         // APIでタスクを更新
         const updateData = {
@@ -572,7 +541,12 @@ export default {
           sort_order: Math.round(newSortOrder * 10) / 10 // 小数点第1位まで
         }
         
-        console.log('Sending update:', updateData)
+        // nullの場合はnullを明示的に送信
+        if (newParentId === null) {
+          updateData.parent_id = null
+        }
+        
+        console.log('Updating task:', droppedTask.TaskName, 'parent_id:', oldParentId, '→', newParentId)
         
         const response = await fetch(`/api/tasks/${droppedTask.TaskID}`, {
           method: 'PUT',
@@ -586,12 +560,16 @@ export default {
         })
         
         if (response.ok) {
-          console.log('Task order updated successfully')
+          const result = await response.json()
+          console.log('Task updated - new parent_id:', result.parent_id)
+          
+          // 新旧の親タスクの日付を更新
+          await this.updateParentTasksAfterMove(oldParentId, newParentId)
           
           // ガントチャートのデータを更新
           setTimeout(() => {
             this.refreshGanttData()
-          }, 100) // 少し遅延させてUI更新を確実にする
+          }, 200) // 親タスク更新後に遅延
         } else {
           console.error('Failed to update task order:', response.status)
           const errorData = await response.json()
@@ -600,6 +578,15 @@ export default {
       } catch (error) {
         console.error('Error updating task order:', error)
       }
+    },
+    
+    // タスクが子タスクを持つかどうかをチェック
+    hasChildren(task) {
+      // Syncfusionガントチャートでは、子タスクはsubtasksまたは別のプロパティに格納される
+      return (task.subtasks && task.subtasks.length > 0) ||
+             (task.hasChildRecords) ||
+             (task.ganttProperties && task.ganttProperties.hasChildRecords) ||
+             (task.childRecords && task.childRecords.length > 0)
     },
     
     // 循環参照チェック：targetTaskがdroppedTaskの子孫かどうか
@@ -791,7 +778,6 @@ export default {
           updatedParent.EndDateFormatted = `${String(maxEndDate.getMonth() + 1).padStart(2, '0')}/${String(maxEndDate.getDate()).padStart(2, '0')}`
         }
         
-        console.log('Updating parent task with new dates:', updatedParent)
         
         // processedData内の親タスクを更新
         this.updateTaskInProcessedData(updatedParent)
@@ -813,7 +799,6 @@ export default {
           })
           
           if (response.ok) {
-            console.log('Parent task dates updated successfully')
             
             // ガントチャートのデータソースを更新
             this.$nextTick(() => {
@@ -870,17 +855,13 @@ export default {
             `${String(new Date(parent.end_date).getMonth() + 1).padStart(2, '0')}/${String(new Date(parent.end_date).getDate()).padStart(2, '0')}` : ''
         }
         
-        console.log('Updating parent task in processedData:', updatedParentTask)
         this.updateTaskInProcessedData(updatedParentTask)
       }
     },
     
     // APIから返された親タスクデータで更新
     async updateParentTasksFromAPI(updatedParents, isEndDateOperation = false) {
-      console.log('Updating parent tasks from API:', updatedParents, 'End date operation:', isEndDateOperation)
-      
       if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
-        console.log('Gantt instance not available')
         return
       }
       
@@ -908,7 +889,6 @@ export default {
           EndDateFormatted: `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}`
         }
         
-        console.log('Updating parent task:', updatedParentTask)
         
         // processedData内の親タスクを更新
         this.updateTaskInProcessedData(updatedParentTask)
@@ -944,7 +924,6 @@ export default {
               ganttInstance.selectedRowIndex = currentSelection
             }
             
-            console.log('Parent tasks updated smoothly in Gantt instance')
           } catch (error) {
             console.error('Error updating parent tasks in Gantt:', error)
             // フォールバックとして完全再読み込み
@@ -958,7 +937,6 @@ export default {
     
     // IDで親タスクの日付を更新
     async updateParentTaskDatesById(parentId) {
-      console.log('Updating parent task dates by ID:', parentId)
       
       // 親タスクを見つける
       const findParentTask = (tasks, targetId) => {
@@ -979,6 +957,31 @@ export default {
         // 仮の子タスクオブジェクトを作成して既存のメソッドを呼び出す
         const dummyChild = { ParentID: parentId }
         await this.updateParentTaskDates(dummyChild)
+      }
+    },
+    
+    // タスク移動後に新旧の親タスクの日付を更新
+    async updateParentTasksAfterMove(oldParentId, newParentId) {
+      
+      const updatePromises = []
+      
+      // 元の親タスクを更新（子が削除されたため）
+      if (oldParentId) {
+        updatePromises.push(this.updateParentTaskDatesById(oldParentId))
+      }
+      
+      // 新しい親タスクを更新（子が追加されたため）
+      if (newParentId && newParentId !== oldParentId) {
+        updatePromises.push(this.updateParentTaskDatesById(newParentId))
+      }
+      
+      // 両方の親タスクを並行して更新
+      if (updatePromises.length > 0) {
+        try {
+          await Promise.all(updatePromises)
+        } catch (error) {
+          console.error('Error updating parent tasks after move:', error)
+        }
       }
     },
     
@@ -1239,7 +1242,6 @@ export default {
     
     // タスクバー情報をカスタマイズ
     onQueryTaskbarInfo(args) {
-      console.log("onQueryTaskbarInfo");
       const data = args.data
       
       // 右ラベルが終了日の場合、MM/dd形式でフォーマット
@@ -1264,13 +1266,11 @@ export default {
     }
   },
   async mounted() {
-    console.log('Gantt Chart component mounted')
     
     // ユーザー設定を読み込み
     await this.loadUserOptions()
     
     if (!this.data || this.data.length === 0) {
-      console.log('No data provided, using sample data')
       this.processedData = [
         {
           TaskID: 1,

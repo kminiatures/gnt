@@ -92,7 +92,14 @@ class TaskController extends Controller
 
     public function update(Request $request, Task $task): JsonResponse
     {
-        $validated = $request->validate([
+        \Log::info('Task update request received', [
+            'task_id' => $task->id,
+            'request_data' => $request->all(),
+            'current_parent_id' => $task->parent_id
+        ]);
+        
+        try {
+            $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'start_date' => 'sometimes|required|date',
@@ -100,11 +107,19 @@ class TaskController extends Controller
             'duration' => 'nullable|integer|min:1',
             'progress' => 'nullable|integer|min:0|max:100',
             'status' => ['nullable', Rule::in(['not_started', 'in_progress', 'completed', 'on_hold', 'cancelled'])],
-            'sort_order' => 'nullable|integer',
+            'sort_order' => 'nullable|numeric',
             'parent_id' => 'nullable|exists:tasks,id',
             'predecessor' => 'nullable|string',
             'assigned_to' => 'nullable|exists:users,id',
         ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Task update validation failed', [
+                'task_id' => $task->id,
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+            throw $e;
+        }
 
         // 親タスクが同じプロジェクト内か確認
         if (isset($validated['parent_id']) && $validated['parent_id']) {
@@ -124,6 +139,13 @@ class TaskController extends Controller
         
         $task->update($validated);
         $task->load(['project', 'assignedUser', 'parent', 'children']);
+        
+        \Log::info('Task updated successfully', [
+            'task_id' => $task->id,
+            'old_parent_id' => $oldParentId,
+            'new_parent_id' => $task->parent_id,
+            'validated_data' => $validated
+        ]);
         
         // 新しい親タスクの日付を更新
         $this->updateParentTaskDates($task);
