@@ -103,6 +103,7 @@
       :dateFormat="'yyyy-MM-dd'"
       :durationUnit="'Day'"
       :includeWeekend="true"
+      :enableContextMenu="false"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -359,12 +360,11 @@ export default {
         console.log('EndDate (formatted):', task.EndDate ? this.formatDateToLocal(task.EndDate) : null)
         console.log('Duration:', task.Duration)
         
-        // バーラベル用の日付フォーマットを更新（少し遅延させる）
-        setTimeout(() => {
-          this.updateTaskDateLabels(task)
-          // 親タスクの日付はAPI側で自動更新されるため、フロントエンド側での更新は不要
-        }, 50)
+        // 終了日のドラッグかどうかを判定
+        const isEndDateResize = args.taskBarEditAction === 'RightResizing'
+        console.log('Is end date resize:', isEndDateResize)
         
+        // API呼び出しを先に行い、成功後にラベルを更新
         try {
           const response = await fetch(`/api/tasks/${task.TaskID}/dates`, {
             method: 'PUT',
@@ -384,14 +384,42 @@ export default {
             const result = await response.json()
             console.log('Task dates updated successfully', result)
             
-            // 更新された親タスクがある場合、データを完全に再読み込み
+            // API成功後に子タスクのラベルを更新
+            this.updateTaskDateLabels(task)
+            
+            // 終了日のドラッグの場合、特別な処理でバー位置を保持
+            if (isEndDateResize) {
+              console.log('End date resize detected - preserving bar position')
+              
+              // processedData内のタスクを即座に更新
+              this.updateTaskInProcessedData({
+                TaskID: task.TaskID,
+                StartDate: task.StartDate,
+                EndDate: task.EndDate,
+                Duration: task.Duration,
+                StartDateFormatted: task.StartDate ? 
+                  `${String(task.StartDate.getMonth() + 1).padStart(2, '0')}/${String(task.StartDate.getDate()).padStart(2, '0')}` : '',
+                EndDateFormatted: task.EndDate ? 
+                  `${String(task.EndDate.getMonth() + 1).padStart(2, '0')}/${String(task.EndDate.getDate()).padStart(2, '0')}` : ''
+              })
+            }
+            
+            // 更新された親タスクがある場合のみ、スムーズに部分更新
             if (result.updated_parents && result.updated_parents.length > 0) {
               console.log('Parent tasks updated by API:', result.updated_parents)
               
-              // 部分更新では同期問題が発生するため、完全再読み込み
-              setTimeout(() => {
-                this.refreshGanttData()
-              }, 200)
+              // 終了日のドラッグの場合はより慎重に親タスクを更新
+              if (isEndDateResize) {
+                // 終了日ドラッグ時は親タスクの更新を更に遅延
+                setTimeout(() => {
+                  this.updateParentTasksFromAPI(result.updated_parents, true)
+                }, 500)
+              } else {
+                // 親タスクのみを効率的に更新（子タスクの位置を保持）
+                this.updateParentTasksFromAPI(result.updated_parents, false)
+              }
+            } else {
+              console.log('No parent tasks to update - child task position preserved')
             }
           } else {
             console.error('Failed to update task dates:', response.status)
@@ -670,14 +698,9 @@ export default {
       
       updateProcessedTask(this.processedData)
       
-      // ガントチャートのデータソースを強制的に更新
-      this.$nextTick(() => {
-        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
-          const ganttInstance = this.$refs.gantt.ej2Instances
-          // データソースを再設定してラベルを更新
-          ganttInstance.dataSource = [...this.processedData]
-        }
-      })
+      // 子タスクのラベル更新時はdataSourceの再設定を避ける
+      // ラベルのみの更新なので、データソースの再設定は不要
+      console.log('Task date labels updated in processedData')
     },
     
     // 親タスクの日付を子タスクに基づいて更新
@@ -853,8 +876,8 @@ export default {
     },
     
     // APIから返された親タスクデータで更新
-    async updateParentTasksFromAPI(updatedParents) {
-      console.log('Updating parent tasks from API:', updatedParents)
+    async updateParentTasksFromAPI(updatedParents, isEndDateOperation = false) {
+      console.log('Updating parent tasks from API:', updatedParents, 'End date operation:', isEndDateOperation)
       
       if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
         console.log('Gantt instance not available')
@@ -862,6 +885,10 @@ export default {
       }
       
       const ganttInstance = this.$refs.gantt.ej2Instances
+      
+      // 終了日操作の場合はより長い遅延
+      const delay = isEndDateOperation ? 200 : 100
+      await new Promise(resolve => setTimeout(resolve, delay))
       
       for (const parent of updatedParents) {
         // API応答の日付をDateオブジェクトに変換
@@ -885,15 +912,48 @@ export default {
         
         // processedData内の親タスクを更新
         this.updateTaskInProcessedData(updatedParentTask)
-        
-        // Syncfusion APIを使って特定のタスクを更新
-        try {
-          ganttInstance.updateRecordByID(updatedParentTask)
-          console.log('Parent task updated in Gantt instance')
-        } catch (error) {
-          console.error('Error updating parent task in Gantt:', error)
-        }
       }
+      
+      // 親タスクの更新は遅延させて、子タスクのドラッグ操作を妨げない
+      const updateDelay = isEndDateOperation ? 500 : 300
+      setTimeout(() => {
+        this.$nextTick(() => {
+          try {
+            // 既存のタスクバーの位置を保持しながら更新
+            const currentSelection = ganttInstance.selectedRowIndex
+            
+            // 終了日操作の場合はより慎重に更新
+            if (isEndDateOperation) {
+              console.log('End date operation - careful dataSource update')
+              // 現在のスクロール位置も保持
+              const scrollLeft = ganttInstance.ganttChartModule.chartBodyContainer.scrollLeft
+              ganttInstance.dataSource = [...this.processedData]
+              
+              // スクロール位置を復元
+              setTimeout(() => {
+                if (ganttInstance.ganttChartModule.chartBodyContainer) {
+                  ganttInstance.ganttChartModule.chartBodyContainer.scrollLeft = scrollLeft
+                }
+              }, 50)
+            } else {
+              ganttInstance.dataSource = [...this.processedData]
+            }
+            
+            // 選択状態を復元
+            if (currentSelection !== -1) {
+              ganttInstance.selectedRowIndex = currentSelection
+            }
+            
+            console.log('Parent tasks updated smoothly in Gantt instance')
+          } catch (error) {
+            console.error('Error updating parent tasks in Gantt:', error)
+            // フォールバックとして完全再読み込み
+            setTimeout(() => {
+              this.refreshGanttData()
+            }, 100)
+          }
+        })
+      }, updateDelay)
     },
     
     // IDで親タスクの日付を更新
