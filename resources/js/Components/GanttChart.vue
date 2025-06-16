@@ -51,6 +51,7 @@
             <option value="">なし</option>
             <option value="TaskName">タスク名</option>
             <option value="StartDate">開始日</option>
+            <option value="StartDateFormatted">開始日(MM/dd)</option>
             <option value="Duration">期間</option>
             <option value="Progress">進捗</option>
           </select>
@@ -78,6 +79,7 @@
             <option value="">なし</option>
             <option value="TaskName">タスク名</option>
             <option value="EndDate">終了日</option>
+            <option value="EndDateFormatted">終了日(MM/dd)</option>
             <option value="Duration">期間</option>
             <option value="Progress">進捗</option>
           </select>
@@ -102,6 +104,7 @@
       @actionComplete="onActionComplete"
       @actionBegin="onActionBegin"
       @rowDrop="onRowDrop"
+      @queryTaskbarInfo="onQueryTaskbarInfo"
     >
     </ejs-gantt>
   </div>
@@ -138,6 +141,7 @@ export default {
   data() {
     return {
       processedData: [],
+      saveTimeout: null,
       taskFields: {
         id: 'TaskID',
         name: 'TaskName',
@@ -147,7 +151,9 @@ export default {
         progress: 'Progress',
         dependency: 'Predecessor',
         child: 'subtasks',
-        parentID: 'ParentID'
+        parentID: 'ParentID',
+        startDateFormatted: 'StartDateFormatted',
+        endDateFormatted: 'EndDateFormatted'
       },
       editSettings: {
         allowTaskbarEditing: true,
@@ -165,16 +171,18 @@ export default {
           field: 'StartDate', 
           headerText: '開始日', 
           width: '100',
-          format: { type: 'date', format: 'yy/MM/dd' }
+          format: { type: 'date', format: 'MM/dd' }
         },
         { 
           field: 'EndDate', 
           headerText: '終了日', 
           width: '100',
-          format: { type: 'date', format: 'yy/MM/dd' }
+          format: { type: 'date', format: 'MM/dd' }
         },
         { field: 'Duration', headerText: '期間', width: '80' },
-        { field: 'Progress', headerText: '進捗', width: '80' }
+        { field: 'Progress', headerText: '進捗', width: '80' },
+        { field: 'StartDateFormatted', visible: false },
+        { field: 'EndDateFormatted', visible: false }
       ],
       timelineSettings: {
         topTier: {
@@ -189,7 +197,7 @@ export default {
       },
       labelSettings: {
         leftLabel: 'TaskName',
-        rightLabel: 'EndDate',
+        rightLabel: 'EndDateFormatted',
         taskLabel: 'Progress'
       },
       selectedScale: 'day',
@@ -230,16 +238,30 @@ export default {
     data: {
       immediate: true,
       handler(newData) {
-        console.log('Raw gantt data:', newData)
-        this.processedData = this.processGanttData(newData)
-        console.log('Processed gantt data:', this.processedData)
+        console.log('Data watcher triggered with:', newData)
+        if (newData && newData.length > 0) {
+          console.log('Processing gantt data...')
+          this.processedData = this.processGanttData(newData)
+          console.log('Processed gantt data:', this.processedData)
+        } else {
+          console.log('No data to process')
+        }
       }
     },
     labelSettings: {
       deep: true,
       handler(newLabelSettings) {
         console.log('Label settings changed:', newLabelSettings)
+        
+        // ラベル設定変更時にもデータを再処理
+        if (this.data && this.data.length > 0) {
+          console.log('Re-processing data due to label change...')
+          this.processedData = this.processGanttData(this.data)
+          console.log('Re-processed data:', this.processedData)
+        }
+        
         this.updateLabelsPreservingZoom()
+        this.saveUserOptions()
       }
     }
   },
@@ -264,13 +286,21 @@ export default {
           Duration: duration,
           Progress: Math.max(0, Math.min(100, parseInt(item.Progress) || 0)),
           Predecessor: item.Predecessor || null,
-          ParentID: item.ParentID || null
+          ParentID: item.ParentID || null,
+          // フォーマット済み日付フィールドを追加
+          StartDateFormatted: startDate ? 
+            `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
+          EndDateFormatted: endDate ? 
+            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : ''
         }
         
         if (item.subtasks && item.subtasks.length > 0) {
           processedItem.subtasks = this.processGanttData(item.subtasks)
         }
         
+        console.log('Processed item:', processedItem) // デバッグ用
+        console.log('StartDateFormatted:', processedItem.StartDateFormatted)
+        console.log('EndDateFormatted:', processedItem.EndDateFormatted)
         return processedItem
       })
     },
@@ -583,6 +613,9 @@ export default {
             ganttInstance.refresh()
           }
         })
+        
+        // ユーザー設定を保存
+        this.saveUserOptions()
       }
     },
     
@@ -605,6 +638,9 @@ export default {
             ganttInstance.refresh()
           }
         })
+        
+        // ユーザー設定を保存
+        this.saveUserOptions()
       }
     },
     
@@ -673,10 +709,165 @@ export default {
           ganttInstance.labelSettings = { ...this.labelSettings }
         }
       })
+    },
+    
+    // ユーザー設定を保存（デバウンス付き）
+    async saveUserOptions() {
+      // 既存のタイマーをクリア
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout)
+      }
+      
+      // 500ms後に保存を実行
+      this.saveTimeout = setTimeout(async () => {
+        try {
+          const userOptions = {
+            gantt: {
+              scale: this.selectedScale,
+              zoom: this.selectedZoom,
+              labelSettings: this.labelSettings
+            }
+          }
+          
+          console.log('Saving user options:', userOptions)
+          
+          const response = await fetch('/api/user-options', {
+            method: 'PUT',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ user_options: userOptions }),
+          })
+          
+          if (response.ok) {
+            console.log('User options saved successfully')
+          } else {
+            console.error('Failed to save user options:', response.status)
+          }
+        } catch (error) {
+          console.error('Error saving user options:', error)
+        }
+      }, 500)
+    },
+    
+    // ユーザー設定を読み込み
+    async loadUserOptions() {
+      try {
+        const response = await fetch('/api/user-options', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('Loaded user options:', data.user_options)
+          
+          if (data.user_options && data.user_options.gantt) {
+            const ganttOptions = data.user_options.gantt
+            
+            // 保存された設定を適用
+            if (ganttOptions.scale) {
+              this.selectedScale = ganttOptions.scale
+            }
+            if (ganttOptions.zoom) {
+              this.selectedZoom = ganttOptions.zoom
+            }
+            if (ganttOptions.labelSettings) {
+              this.labelSettings = { ...ganttOptions.labelSettings }
+            }
+            
+            // スケールとズームを適用
+            this.changeTimelineScale()
+            
+            console.log('User options applied successfully')
+          }
+        } else {
+          console.error('Failed to load user options:', response.status)
+        }
+      } catch (error) {
+        console.error('Error loading user options:', error)
+      }
+    },
+    
+    // 日付をMM/dd形式でフォーマット
+    formatDate(value, field) {
+      if (!value) return ''
+      
+      let date
+      if (typeof value === 'string') {
+        date = new Date(value)
+      } else if (value instanceof Date) {
+        date = value
+      } else {
+        return value
+      }
+      
+      if (isNaN(date.getTime())) return value
+      
+      // 日付フィールドの場合のみフォーマット
+      if (field === 'StartDate' || field === 'EndDate') {
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${month}/${day}`
+      }
+      
+      return value
+    },
+    
+    // 日付を短縮形式でフォーマット
+    formatDateShort(date) {
+      if (!date) return ''
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${month}/${day}`
+    },
+    
+    // データ処理用のインライン日付フォーマット
+    formatDateShortInline(date) {
+      if (!date) return ''
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${month}/${day}`
+    },
+    
+    // タスクバー情報をカスタマイズ
+    onQueryTaskbarInfo(args) {
+      console.log("onQueryTaskbarInfo");
+      const data = args.data
+      
+      // 右ラベルが終了日の場合、MM/dd形式でフォーマット
+      if (this.labelSettings.rightLabel === 'EndDate' && data.EndDate) {
+        const endDate = new Date(data.EndDate)
+        if (!isNaN(endDate.getTime())) {
+          const month = String(endDate.getMonth() + 1).padStart(2, '0')
+          const day = String(endDate.getDate()).padStart(2, '0')
+          args.rightLabel = `${month}/${day}`
+        }
+      }
+      
+      // 左ラベルが開始日の場合、MM/dd形式でフォーマット
+      if (this.labelSettings.leftLabel === 'StartDate' && data.StartDate) {
+        const startDate = new Date(data.StartDate)
+        if (!isNaN(startDate.getTime())) {
+          const month = String(startDate.getMonth() + 1).padStart(2, '0')
+          const day = String(startDate.getDate()).padStart(2, '0')
+          args.leftLabel = `${month}/${day}`
+        }
+      }
     }
   },
-  mounted() {
+  async mounted() {
     console.log('Gantt Chart component mounted')
+    
+    // ユーザー設定を読み込み
+    await this.loadUserOptions()
     
     if (!this.data || this.data.length === 0) {
       console.log('No data provided, using sample data')

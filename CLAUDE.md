@@ -1,8 +1,10 @@
 # CLAUDE.md
 
-* いつも日本語で回答してください。
-
 このファイルは、このリポジトリでコードを扱う際のClaude Code (claude.ai/code) へのガイダンスを提供します。
+
+* いつも日本語で回答してください。
+* ガントチャートライブラリのドキュメントは  https://ej2.syncfusion.com/vue/documentation/gantt で、参照してOKです。
+
 
 ## プロジェクト概要
 
@@ -50,11 +52,11 @@ $page.props.auth- フロントエンド: Vite + TailwindCSS 4.0
 ## 開発コマンド
 
 ### 基本的なLaravelコマンド
-- `php artisan serve` - 開発サーバーを起動
-- `php artisan migrate` - データベースマイグレーションを実行
-- `php artisan migrate:fresh --seed` - シーダー付きで新しいデータベースを作成
-- `php artisan queue:work` - キューされたジョブを処理
-- `php artisan tinker` - インタラクティブなPHPシェル
+- `sail php artisan serve` - 開発サーバーを起動
+- `sail php artisan migrate` - データベースマイグレーションを実行
+- `sail php artisan migrate:fresh --seed` - シーダー付きで新しいデータベースを作成
+- `sail php artisan queue:work` - キューされたジョブを処理
+- `sail php artisan tinker` - インタラクティブなPHPシェル
 
 ### テスト
 - `composer test` または `php artisan test` - すべてのテストを実行
