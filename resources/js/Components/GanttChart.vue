@@ -1,5 +1,90 @@
 <template>
   <div class="gantt-container">
+    <!-- スケール変更コントロール -->
+    <div class="scale-controls mb-4 p-3 bg-gray-50 rounded-lg border">
+      <div class="flex items-center space-x-4">
+        <label class="text-sm font-medium text-gray-700">表示スケール:</label>
+        <select 
+          v-model="selectedScale" 
+          @change="changeTimelineScale"
+          class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="day">日単位</option>
+          <option value="week">週単位</option>
+          <option value="month">月単位</option>
+          <option value="quarter">四半期単位</option>
+          <option value="year">年単位</option>
+        </select>
+        
+        <label class="text-sm font-medium text-gray-700">ズーム:</label>
+        <select 
+          v-model="selectedZoom" 
+          @change="changeZoomLevel"
+          class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="50">50%</option>
+          <option value="75">75%</option>
+          <option value="100">100%</option>
+          <option value="125">125%</option>
+          <option value="150">150%</option>
+          <option value="200">200%</option>
+        </select>
+        
+        <button 
+          @click="fitToScreen"
+          class="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          画面に合わせる
+        </button>
+      </div>
+      
+      <!-- ラベル表示設定 -->
+      <div class="flex items-center space-x-4 mt-3 pt-3 border-t border-gray-200">
+        <label class="text-sm font-medium text-gray-700">バーラベル:</label>
+        
+        <div class="flex items-center space-x-2">
+          <label class="text-xs text-gray-600">左側:</label>
+          <select 
+            v-model="labelSettings.leftLabel"
+            class="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">なし</option>
+            <option value="TaskName">タスク名</option>
+            <option value="StartDate">開始日</option>
+            <option value="Duration">期間</option>
+            <option value="Progress">進捗</option>
+          </select>
+        </div>
+        
+        <div class="flex items-center space-x-2">
+          <label class="text-xs text-gray-600">バー内:</label>
+          <select 
+            v-model="labelSettings.taskLabel"
+            class="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">なし</option>
+            <option value="TaskName">タスク名</option>
+            <option value="Progress">進捗</option>
+            <option value="Duration">期間</option>
+          </select>
+        </div>
+        
+        <div class="flex items-center space-x-2">
+          <label class="text-xs text-gray-600">右側:</label>
+          <select 
+            v-model="labelSettings.rightLabel"
+            class="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">なし</option>
+            <option value="TaskName">タスク名</option>
+            <option value="EndDate">終了日</option>
+            <option value="Duration">期間</option>
+            <option value="Progress">進捗</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
     <ejs-gantt
       ref="gantt"
       id="GanttContainer"
@@ -7,6 +92,9 @@
       :taskFields="taskFields"
       :editSettings="editSettings"
       :toolbar="toolbar"
+      :columns="columns"
+      :timelineSettings="timelineSettings"
+      :labelSettings="labelSettings"
       :allowRowDragAndDrop="true"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
@@ -69,7 +157,70 @@ export default {
         allowDragAndDrop: true,
         mode: 'Auto'
       },
-      toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel']
+      toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel', 'ZoomIn', 'ZoomOut', 'ZoomToFit', 'PrevTimeSpan', 'NextTimeSpan'],
+      columns: [
+        { field: 'TaskID', visible: false },
+        { field: 'TaskName', headerText: 'タスク名', width: '250' },
+        { 
+          field: 'StartDate', 
+          headerText: '開始日', 
+          width: '100',
+          format: { type: 'date', format: 'yy/MM/dd' }
+        },
+        { 
+          field: 'EndDate', 
+          headerText: '終了日', 
+          width: '100',
+          format: { type: 'date', format: 'yy/MM/dd' }
+        },
+        { field: 'Duration', headerText: '期間', width: '80' },
+        { field: 'Progress', headerText: '進捗', width: '80' }
+      ],
+      timelineSettings: {
+        topTier: {
+          unit: 'Month',
+          format: 'yy/MM'
+        },
+        bottomTier: {
+          unit: 'Day',
+          format: 'MM/dd'
+        },
+        timelineUnitSize: 60
+      },
+      labelSettings: {
+        leftLabel: 'TaskName',
+        rightLabel: 'EndDate',
+        taskLabel: 'Progress'
+      },
+      selectedScale: 'day',
+      selectedZoom: '100',
+      scalePresets: {
+        day: {
+          topTier: { unit: 'Month', format: 'yy/MM' },
+          bottomTier: { unit: 'Day', format: 'MM/dd' },
+          timelineUnitSize: 60
+        },
+        week: {
+          topTier: { unit: 'Month', format: 'yy/MM' },
+          bottomTier: { unit: 'Week', format: 'MM/dd' },
+          timelineUnitSize: 80
+        },
+        month: {
+          topTier: { unit: 'Year', format: 'yyyy' },
+          bottomTier: { unit: 'Month', format: 'yy/MM' },
+          timelineUnitSize: 100
+        },
+        quarter: {
+          topTier: { unit: 'Year', format: 'yyyy' },
+          bottomTier: { unit: 'Quarter', format: 'Q' },
+          timelineUnitSize: 120
+        },
+        year: {
+          topTier: { unit: 'None' },
+          bottomTier: { unit: 'Year', format: 'yyyy' },
+          timelineUnitSize: 150
+        }
+      }
     }
   },
   provide: {
@@ -82,6 +233,13 @@ export default {
         console.log('Raw gantt data:', newData)
         this.processedData = this.processGanttData(newData)
         console.log('Processed gantt data:', this.processedData)
+      }
+    },
+    labelSettings: {
+      deep: true,
+      handler(newLabelSettings) {
+        console.log('Label settings changed:', newLabelSettings)
+        this.updateLabelsPreservingZoom()
       }
     }
   },
@@ -403,6 +561,118 @@ export default {
       })
       
       return maxOrder + 1
+    },
+    
+    // スケール変更メソッド
+    changeTimelineScale() {
+      console.log('Changing timeline scale to:', this.selectedScale)
+      
+      const preset = this.scalePresets[this.selectedScale]
+      if (preset) {
+        // タイムライン設定を更新
+        this.timelineSettings = {
+          ...preset,
+          timelineUnitSize: Math.round(preset.timelineUnitSize * (parseInt(this.selectedZoom) / 100))
+        }
+        
+        // ガントチャートインスタンスの設定を更新
+        this.$nextTick(() => {
+          if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+            const ganttInstance = this.$refs.gantt.ej2Instances
+            ganttInstance.timelineSettings = this.timelineSettings
+            ganttInstance.refresh()
+          }
+        })
+      }
+    },
+    
+    changeZoomLevel() {
+      console.log('Changing zoom level to:', this.selectedZoom + '%')
+      
+      const preset = this.scalePresets[this.selectedScale]
+      if (preset) {
+        // ズームレベルに応じてtimelineUnitSizeを調整
+        this.timelineSettings = {
+          ...this.timelineSettings,
+          timelineUnitSize: Math.round(preset.timelineUnitSize * (parseInt(this.selectedZoom) / 100))
+        }
+        
+        // ガントチャートインスタンスの設定を更新
+        this.$nextTick(() => {
+          if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+            const ganttInstance = this.$refs.gantt.ej2Instances
+            ganttInstance.timelineSettings = this.timelineSettings
+            ganttInstance.refresh()
+          }
+        })
+      }
+    },
+    
+    fitToScreen() {
+      console.log('Fitting gantt chart to screen')
+      
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.fitToProject()
+        }
+      })
+    },
+    
+    updateLabelsPreservingZoom() {
+      if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
+        return
+      }
+      
+      this.$nextTick(() => {
+        try {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          
+          // 現在の状態を保存
+          const currentTimelineSettings = { ...ganttInstance.timelineSettings }
+          const chartElement = ganttInstance.element.querySelector('.e-chart-scroll-container .e-content')
+          const currentScrollLeft = chartElement ? chartElement.scrollLeft : 0
+          const currentScrollTop = chartElement ? chartElement.scrollTop : 0
+          
+          console.log('Preserving zoom state:', {
+            timelineUnitSize: currentTimelineSettings.timelineUnitSize,
+            scrollLeft: currentScrollLeft,
+            scrollTop: currentScrollTop
+          })
+          
+          // ラベル設定を更新
+          ganttInstance.labelSettings = { ...this.labelSettings }
+          
+          // ラベルのみを再描画（軽量な更新）
+          if (ganttInstance.renderGantt) {
+            ganttInstance.renderGantt()
+          } else if (ganttInstance.refresh) {
+            // renderGanttが利用できない場合はrefreshを使用
+            ganttInstance.refresh()
+          }
+          
+          // ズーム状態とスクロール位置を復元
+          this.$nextTick(() => {
+            // タイムライン設定を復元
+            ganttInstance.timelineSettings = currentTimelineSettings
+            
+            // スクロール位置を復元
+            const newChartElement = ganttInstance.element.querySelector('.e-chart-scroll-container .e-content')
+            if (newChartElement) {
+              newChartElement.scrollLeft = currentScrollLeft
+              newChartElement.scrollTop = currentScrollTop
+            }
+            
+            console.log('Zoom state and scroll position restored')
+          })
+          
+        } catch (error) {
+          console.error('Error updating labels while preserving zoom:', error)
+          // フォールバック：通常の更新
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.labelSettings = { ...this.labelSettings }
+        }
+      })
     }
   },
   mounted() {
@@ -437,6 +707,30 @@ export default {
 .gantt-container {
   width: 100%;
   margin: 20px 0;
+}
+
+/* スケールコントロールのスタイル */
+.scale-controls {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border: 1px solid #cbd5e1;
+}
+
+.scale-controls select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.scale-controls select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.scale-controls button {
+  transition: all 0.2s ease;
+}
+
+.scale-controls button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Syncfusionのスタイルをカスタマイズ */
@@ -503,6 +797,50 @@ export default {
 :deep(.e-gantt .e-summarytaskbar) {
   background: #f5f5f5;
   border-left: 3px solid #2196f3;
+}
+
+/* タスクバーラベルのスタイル */
+:deep(.e-gantt .e-left-label-container) {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.e-gantt .e-right-label-container) {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.e-gantt .e-task-label) {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* プログレス表示の場合のスタイル */
+:deep(.e-gantt .e-task-label[data-field="Progress"]) {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* 日付フォーマットのスタイル調整 */
+:deep(.e-gantt .e-right-label-container[data-field="EndDate"]) {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  color: #1565c0;
+  border: 1px solid #90caf9;
 }
 
 /* タスクバーのドラッグ可能スタイル */
