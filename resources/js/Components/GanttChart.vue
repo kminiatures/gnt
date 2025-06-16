@@ -98,6 +98,11 @@
       :timelineSettings="timelineSettings"
       :labelSettings="labelSettings"
       :allowRowDragAndDrop="true"
+      :projectStartDate="null"
+      :projectEndDate="null"
+      :dateFormat="'yyyy-MM-dd'"
+      :durationUnit="'Day'"
+      :includeWeekend="true"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -142,6 +147,10 @@ export default {
     return {
       processedData: [],
       saveTimeout: null,
+      projectSettings: {
+        dateFormat: 'yyyy-MM-dd',
+        durationUnit: 'Day'
+      },
       taskFields: {
         id: 'TaskID',
         name: 'TaskName',
@@ -273,7 +282,11 @@ export default {
         
         let duration = 1
         if (startDate && endDate) {
-          duration = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1)
+          // 日付の差を正確に計算（ミリ秒単位での計算を避ける）
+          const diffTime = endDate.getTime() - startDate.getTime()
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          duration = Math.max(1, diffDays + 1) // +1 for inclusive end date
+          console.log(`Duration calculation: ${endDate.toISOString().split('T')[0]} - ${startDate.toISOString().split('T')[0]} = ${duration} days`)
         } else if (item.Duration) {
           duration = Math.max(1, parseInt(item.Duration))
         }
@@ -340,10 +353,16 @@ export default {
       )) {
         const task = args.data
         console.log('Updating task dates:', task)
+        console.log('StartDate (original):', task.StartDate)
+        console.log('EndDate (original):', task.EndDate)
+        console.log('StartDate (formatted):', task.StartDate ? this.formatDateToLocal(task.StartDate) : null)
+        console.log('EndDate (formatted):', task.EndDate ? this.formatDateToLocal(task.EndDate) : null)
+        console.log('Duration:', task.Duration)
         
         // バーラベル用の日付フォーマットを更新（少し遅延させる）
         setTimeout(() => {
           this.updateTaskDateLabels(task)
+          // 親タスクの日付はAPI側で自動更新されるため、フロントエンド側での更新は不要
         }, 50)
         
         try {
@@ -356,13 +375,24 @@ export default {
             },
             credentials: 'same-origin',
             body: JSON.stringify({
-              start_date: task.StartDate?.toISOString().split('T')[0],
-              end_date: task.EndDate?.toISOString().split('T')[0],
+              start_date: task.StartDate ? this.formatDateToLocal(task.StartDate) : null,
+              end_date: task.EndDate ? this.formatDateToLocal(task.EndDate) : null,
             }),
           })
           
           if (response.ok) {
-            console.log('Task dates updated successfully')
+            const result = await response.json()
+            console.log('Task dates updated successfully', result)
+            
+            // 更新された親タスクがある場合、データを完全に再読み込み
+            if (result.updated_parents && result.updated_parents.length > 0) {
+              console.log('Parent tasks updated by API:', result.updated_parents)
+              
+              // 部分更新では同期問題が発生するため、完全再読み込み
+              setTimeout(() => {
+                this.refreshGanttData()
+              }, 200)
+            }
           } else {
             console.error('Failed to update task dates:', response.status)
           }
@@ -383,8 +413,8 @@ export default {
       const newTaskData = {
         project_id: this.projectId,
         name: taskData.TaskName || 'New Task',
-        start_date: taskData.StartDate ? taskData.StartDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        end_date: taskData.EndDate ? taskData.EndDate.toISOString().split('T')[0] : new Date(Date.now() + 24*60*60*1000).toISOString().split('T')[0],
+        start_date: taskData.StartDate ? this.formatDateToLocal(taskData.StartDate) : this.formatDateToLocal(new Date()),
+        end_date: taskData.EndDate ? this.formatDateToLocal(taskData.EndDate) : this.formatDateToLocal(new Date(Date.now() + 24*60*60*1000)),
         progress: taskData.Progress || 0,
         status: 'not_started',
         parent_id: taskData.ParentID || null
@@ -648,6 +678,259 @@ export default {
           ganttInstance.dataSource = [...this.processedData]
         }
       })
+    },
+    
+    // 親タスクの日付を子タスクに基づいて更新
+    async updateParentTaskDates(childTask) {
+      if (!childTask.ParentID) {
+        console.log('Task has no parent, skipping parent date update')
+        return
+      }
+      
+      console.log('Updating parent task dates for child:', childTask)
+      
+      // 親タスクを見つける
+      const findParentTask = (tasks, parentId) => {
+        for (let task of tasks) {
+          if (task.TaskID === parentId) {
+            return task
+          }
+          if (task.subtasks) {
+            const found = findParentTask(task.subtasks, parentId)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      
+      const parentTask = findParentTask(this.processedData, childTask.ParentID)
+      if (!parentTask) {
+        console.log('Parent task not found')
+        return
+      }
+      
+      console.log('Found parent task:', parentTask)
+      
+      // 親タスクの全子タスクを取得
+      const getAllChildTasks = (parent) => {
+        const children = []
+        if (parent.subtasks && parent.subtasks.length > 0) {
+          for (let child of parent.subtasks) {
+            children.push(child)
+            // 再帰的に孫タスクも取得
+            children.push(...getAllChildTasks(child))
+          }
+        }
+        return children
+      }
+      
+      const allChildren = getAllChildTasks(parentTask)
+      console.log('All child tasks:', allChildren)
+      
+      if (allChildren.length === 0) {
+        console.log('No child tasks found')
+        return
+      }
+      
+      // 子タスクの最小開始日と最大終了日を計算
+      let minStartDate = null
+      let maxEndDate = null
+      
+      for (let child of allChildren) {
+        if (child.StartDate) {
+          if (!minStartDate || child.StartDate < minStartDate) {
+            minStartDate = child.StartDate
+          }
+        }
+        if (child.EndDate) {
+          if (!maxEndDate || child.EndDate > maxEndDate) {
+            maxEndDate = child.EndDate
+          }
+        }
+      }
+      
+      console.log('Calculated min start date:', minStartDate)
+      console.log('Calculated max end date:', maxEndDate)
+      
+      // 親タスクの日付を更新
+      if (minStartDate || maxEndDate) {
+        const updatedParent = {
+          ...parentTask,
+          StartDate: minStartDate || parentTask.StartDate,
+          EndDate: maxEndDate || parentTask.EndDate
+        }
+        
+        // フォーマット済み日付も更新
+        if (minStartDate) {
+          updatedParent.StartDateFormatted = `${String(minStartDate.getMonth() + 1).padStart(2, '0')}/${String(minStartDate.getDate()).padStart(2, '0')}`
+        }
+        if (maxEndDate) {
+          updatedParent.EndDateFormatted = `${String(maxEndDate.getMonth() + 1).padStart(2, '0')}/${String(maxEndDate.getDate()).padStart(2, '0')}`
+        }
+        
+        console.log('Updating parent task with new dates:', updatedParent)
+        
+        // processedData内の親タスクを更新
+        this.updateTaskInProcessedData(updatedParent)
+        
+        // APIで親タスクの日付を更新
+        try {
+          const response = await fetch(`/api/tasks/${parentTask.TaskID}/dates`, {
+            method: 'PUT',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              start_date: updatedParent.StartDate?.toISOString().split('T')[0],
+              end_date: updatedParent.EndDate?.toISOString().split('T')[0],
+            }),
+          })
+          
+          if (response.ok) {
+            console.log('Parent task dates updated successfully')
+            
+            // ガントチャートのデータソースを更新
+            this.$nextTick(() => {
+              if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+                const ganttInstance = this.$refs.gantt.ej2Instances
+                ganttInstance.dataSource = [...this.processedData]
+              }
+            })
+          } else {
+            console.error('Failed to update parent task dates:', response.status)
+          }
+        } catch (error) {
+          console.error('Error updating parent task dates:', error)
+        }
+      }
+    },
+    
+    // processedData内のタスクを更新
+    updateTaskInProcessedData(updatedTask) {
+      const updateTask = (tasks) => {
+        for (let i = 0; i < tasks.length; i++) {
+          if (tasks[i].TaskID === updatedTask.TaskID) {
+            tasks[i] = { ...tasks[i], ...updatedTask }
+            console.log('Updated task in processedData:', tasks[i])
+            return true
+          }
+          
+          if (tasks[i].subtasks && updateTask(tasks[i].subtasks)) {
+            return true
+          }
+        }
+        return false
+      }
+      
+      updateTask(this.processedData)
+    },
+    
+    // 複数の親タスクをprocessedDataで更新
+    updateParentTasksInProcessedData(updatedParents) {
+      for (const parent of updatedParents) {
+        // API応答の日付をDateオブジェクトに変換
+        const updatedParentTask = {
+          TaskID: parent.id,
+          TaskName: parent.name,
+          StartDate: new Date(parent.start_date),
+          EndDate: new Date(parent.end_date),
+          Duration: parent.duration,
+          Progress: parent.progress,
+          ParentID: parent.parent_id,
+          // フォーマット済み日付も更新
+          StartDateFormatted: parent.start_date ? 
+            `${String(new Date(parent.start_date).getMonth() + 1).padStart(2, '0')}/${String(new Date(parent.start_date).getDate()).padStart(2, '0')}` : '',
+          EndDateFormatted: parent.end_date ? 
+            `${String(new Date(parent.end_date).getMonth() + 1).padStart(2, '0')}/${String(new Date(parent.end_date).getDate()).padStart(2, '0')}` : ''
+        }
+        
+        console.log('Updating parent task in processedData:', updatedParentTask)
+        this.updateTaskInProcessedData(updatedParentTask)
+      }
+    },
+    
+    // APIから返された親タスクデータで更新
+    async updateParentTasksFromAPI(updatedParents) {
+      console.log('Updating parent tasks from API:', updatedParents)
+      
+      if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
+        console.log('Gantt instance not available')
+        return
+      }
+      
+      const ganttInstance = this.$refs.gantt.ej2Instances
+      
+      for (const parent of updatedParents) {
+        // API応答の日付をDateオブジェクトに変換
+        const startDate = new Date(parent.start_date)
+        const endDate = new Date(parent.end_date)
+        
+        const updatedParentTask = {
+          TaskID: parent.id,
+          TaskName: parent.name,
+          StartDate: startDate,
+          EndDate: endDate,
+          Duration: parent.duration,
+          Progress: parent.progress,
+          ParentID: parent.parent_id,
+          // フォーマット済み日付も更新
+          StartDateFormatted: `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}`,
+          EndDateFormatted: `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}`
+        }
+        
+        console.log('Updating parent task:', updatedParentTask)
+        
+        // processedData内の親タスクを更新
+        this.updateTaskInProcessedData(updatedParentTask)
+        
+        // Syncfusion APIを使って特定のタスクを更新
+        try {
+          ganttInstance.updateRecordByID(updatedParentTask)
+          console.log('Parent task updated in Gantt instance')
+        } catch (error) {
+          console.error('Error updating parent task in Gantt:', error)
+        }
+      }
+    },
+    
+    // IDで親タスクの日付を更新
+    async updateParentTaskDatesById(parentId) {
+      console.log('Updating parent task dates by ID:', parentId)
+      
+      // 親タスクを見つける
+      const findParentTask = (tasks, targetId) => {
+        for (let task of tasks) {
+          if (task.TaskID === targetId) {
+            return task
+          }
+          if (task.subtasks) {
+            const found = findParentTask(task.subtasks, targetId)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      
+      const parentTask = findParentTask(this.processedData, parentId)
+      if (parentTask) {
+        // 仮の子タスクオブジェクトを作成して既存のメソッドを呼び出す
+        const dummyChild = { ParentID: parentId }
+        await this.updateParentTaskDates(dummyChild)
+      }
+    },
+    
+    // 日付をローカルタイムゾーンでYYYY-MM-DD形式にフォーマット
+    formatDateToLocal(date) {
+      if (!date) return null
+      
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      
+      return `${year}-${month}-${day}`
     },
     
     // スケール変更メソッド

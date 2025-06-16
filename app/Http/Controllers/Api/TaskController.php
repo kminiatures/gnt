@@ -77,6 +77,9 @@ class TaskController extends Controller
 
         $task = Task::create($validated);
         $task->load(['project', 'assignedUser', 'parent', 'children']);
+        
+        // 親タスクの日付を自動更新
+        $this->updateParentTaskDates($task);
 
         return response()->json($task, 201);
     }
@@ -116,15 +119,41 @@ class TaskController extends Controller
             return response()->json(['error' => 'Task cannot be its own parent'], 422);
         }
 
+        // 親の変更があるかチェック
+        $oldParentId = $task->parent_id;
+        
         $task->update($validated);
         $task->load(['project', 'assignedUser', 'parent', 'children']);
+        
+        // 新しい親タスクの日付を更新
+        $this->updateParentTaskDates($task);
+        
+        // 元の親タスクの日付も更新（親が変更された場合）
+        if ($oldParentId && $oldParentId !== $task->parent_id) {
+            $oldParent = Task::find($oldParentId);
+            if ($oldParent) {
+                $this->updateParentTaskDates($oldParent);
+            }
+        }
 
         return response()->json($task);
     }
 
     public function destroy(Task $task): JsonResponse
     {
+        // 削除前に親タスクのIDを保存
+        $parentId = $task->parent_id;
+        
         $task->delete();
+        
+        // 親タスクの日付を更新（削除されたタスクの親がある場合）
+        if ($parentId) {
+            $parentTask = Task::find($parentId);
+            if ($parentTask) {
+                $this->updateParentTaskDates($parentTask);
+            }
+        }
+        
         return response()->json(['message' => 'Task deleted successfully']);
     }
 
@@ -164,8 +193,94 @@ class TaskController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        $task->update($validated);
+        // 期間も計算して更新
+        $startDate = \Carbon\Carbon::parse($validated['start_date']);
+        $endDate = \Carbon\Carbon::parse($validated['end_date']);
+        $validated['duration'] = $startDate->diffInDays($endDate) + 1;
 
-        return response()->json($task);
+        $task->update($validated);
+        
+        // 親タスクの日付を自動更新し、更新された親タスクを収集
+        $updatedParents = $this->updateParentTaskDates($task);
+
+        return response()->json([
+            'task' => $task,
+            'updated_parents' => $updatedParents
+        ]);
+    }
+    
+    /**
+     * 親タスクの日付を子タスクの日付範囲に基づいて更新
+     */
+    private function updateParentTaskDates(Task $task): array
+    {
+        $updatedParents = [];
+        
+        if (!$task->parent_id) {
+            return $updatedParents; // 親タスクがない場合は空配列を返す
+        }
+        
+        $parentTask = Task::find($task->parent_id);
+        if (!$parentTask) {
+            return $updatedParents; // 親タスクが見つからない場合は空配列を返す
+        }
+        
+        // 親タスクの全子タスクを取得（孫タスクも含む）
+        $allChildTasks = $this->getAllDescendantTasks($parentTask);
+        
+        if ($allChildTasks->isEmpty()) {
+            return $updatedParents; // 子タスクがない場合は空配列を返す
+        }
+        
+        // 子タスクの最小開始日と最大終了日を計算
+        $minStartDate = $allChildTasks->min('start_date');
+        $maxEndDate = $allChildTasks->max('end_date');
+        
+        // 親タスクの日付を更新
+        $updateData = [];
+        if ($minStartDate && $minStartDate !== $parentTask->start_date) {
+            $updateData['start_date'] = $minStartDate;
+        }
+        if ($maxEndDate && $maxEndDate !== $parentTask->end_date) {
+            $updateData['end_date'] = $maxEndDate;
+        }
+        
+        if (!empty($updateData)) {
+            // 期間も再計算
+            if (isset($updateData['start_date']) && isset($updateData['end_date'])) {
+                $startDate = \Carbon\Carbon::parse($updateData['start_date']);
+                $endDate = \Carbon\Carbon::parse($updateData['end_date']);
+                $updateData['duration'] = $startDate->diffInDays($endDate) + 1;
+            }
+            
+            $parentTask->update($updateData);
+            $parentTask->refresh(); // 最新データを取得
+            $updatedParents[] = $parentTask;
+            
+            // 再帰的に祖父母タスクも更新
+            $grandParentUpdates = $this->updateParentTaskDates($parentTask);
+            $updatedParents = array_merge($updatedParents, $grandParentUpdates);
+        }
+        
+        return $updatedParents;
+    }
+    
+    /**
+     * タスクの全子孫タスクを取得（再帰的）
+     */
+    private function getAllDescendantTasks(Task $task)
+    {
+        $descendants = collect();
+        
+        // 直接の子タスクを取得
+        $children = Task::where('parent_id', $task->id)->get();
+        
+        foreach ($children as $child) {
+            $descendants->push($child);
+            // 再帰的に孫タスクも取得
+            $descendants = $descendants->merge($this->getAllDescendantTasks($child));
+        }
+        
+        return $descendants;
     }
 }
