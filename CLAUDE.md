@@ -1,9 +1,9 @@
 # CLAUDE.md
 
-このファイルは、このリポジトリでコードを扱う際のClaude Code (claude.ai/code) へのガイダンスを提供します。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 * いつも日本語で回答してください。
-* ガントチャートライブラリのドキュメントは  https://ej2.syncfusion.com/vue/documentation/gantt で、参照してOKです。
+* ガントチャートライブラリのドキュメントは https://ej2.syncfusion.com/vue/documentation/gantt で、参照してOKです。
 
 
 ## プロジェクト概要
@@ -21,7 +21,7 @@
 
 PHP 8.2+を使用したLaravel 12アプリケーションで、以下の主要技術を使用しています：
 
-$page.props.auth- フロントエンド: Vite + TailwindCSS 4.0
+- フロントエンド: Vite + TailwindCSS 4.0
 - データベース: SQLite（デフォルト）、Docker経由でMariaDBサポート
 - テスト: FeatureテストとUnitテストスイートを持つPHPUnit
 - 開発ツール: Laravel Pint（コードフォーマット）、Laravel Pail（ログ監視）
@@ -59,10 +59,10 @@ $page.props.auth- フロントエンド: Vite + TailwindCSS 4.0
 - `sail php artisan tinker` - インタラクティブなPHPシェル
 
 ### テスト
-- `composer test` または `php artisan test` - すべてのテストを実行
-- `php artisan test --filter=ExampleTest` - 特定のテストを実行
-- `vendor/bin/phpunit tests/Unit` - ユニットテストのみ実行
-- `vendor/bin/phpunit tests/Feature` - フィーチャーテストのみ実行
+- `composer test` または `./vendor/bin/sail artisan test` - すべてのテストを実行
+- `./vendor/bin/sail artisan test --filter=ExampleTest` - 特定のテストを実行
+- `./vendor/bin/sail exec laravel.test vendor/bin/pest tests/Unit` - ユニットテストのみ実行（Pest使用）
+- `./vendor/bin/sail exec laravel.test vendor/bin/pest tests/Feature` - フィーチャーテストのみ実行（Pest使用）
 
 ### フロントエンド開発
 - `npm run dev` - Vite開発サーバーを起動
@@ -72,8 +72,9 @@ $page.props.auth- フロントエンド: Vite + TailwindCSS 4.0
 - `composer dev` - すべてのサービスを同時に開始（サーバー、キュー、ログ、vite）
 
 ### コード品質
-- `vendor/bin/pint` - Laravel Pintでコードをフォーマット
-- `php artisan config:clear` - 設定キャッシュをクリア
+- `./vendor/bin/sail exec laravel.test vendor/bin/pint` - Laravel Pintでコードをフォーマット
+- `npm run lint` - ESLintでVue/JavaScriptコードをフォーマット
+- `./vendor/bin/sail artisan config:clear` - 設定キャッシュをクリア
 
 ### Docker (Laravel Sail)
 - `./vendor/bin/sail up` - Docker環境を開始
@@ -127,3 +128,22 @@ PHPUnitは、テスト時に分離されたテストデータベースとキャ�
 2. フロントエンド変更時：`npm run dev`でホットリロード開発
 3. 本番デプロイ前：`composer test`でテスト実行 → `vendor/bin/pint`でコード整形
 4. Docker使用時：`./vendor/bin/sail`プレフィックスを全コマンドに追加
+
+## アプリケーション固有のアーキテクチャ
+
+### ガントチャート機能
+- **コアコンポーネント**: `resources/js/Components/GanttChart.vue` - Syncfusion ej2-vue-ganttを使用
+- **ユーザー設定**: `user_options`（JSON型）でスケール・ズーム・ラベル設定を永続化
+- **API接続**: `/api/user-options` でユーザー設定の保存・読み込み、タスクCRUD操作
+- **日付フォーマット**: カスタムフィールド `StartDateFormatted`/`EndDateFormatted` でMM/dd表示
+
+### API設計パターン
+- **二重認証対応**: Sanctum（API）とWeb（Inertia.js）の両方でルート定義
+- **コントローラー構造**: `app/Http/Controllers/Api/` 下に機能別コントローラー
+- **ユーザー設定**: `UserOptionsController` でJSON形式の設定管理
+
+### フロントエンド構造
+- **Inertia.js + Vue 3**: SSRライクな体験でSPA構築
+- **ページ構造**: `resources/js/Pages/` 下にルートベースのページコンポーネント
+- **共通コンポーネント**: `resources/js/Components/` 下に再利用可能コンポーネント
+- **レイアウト**: `AuthenticatedLayout.vue` でメイン画面構造

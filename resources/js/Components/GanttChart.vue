@@ -341,6 +341,11 @@ export default {
         const task = args.data
         console.log('Updating task dates:', task)
         
+        // バーラベル用の日付フォーマットを更新（少し遅延させる）
+        setTimeout(() => {
+          this.updateTaskDateLabels(task)
+        }, 50)
+        
         try {
           const response = await fetch(`/api/tasks/${task.TaskID}/dates`, {
             method: 'PUT',
@@ -591,6 +596,58 @@ export default {
       })
       
       return maxOrder + 1
+    },
+    
+    // タスクバードラッグ時に日付ラベルを更新
+    updateTaskDateLabels(task) {
+      console.log('Updating task date labels for:', task)
+      console.log('Current StartDate:', task.StartDate)
+      console.log('Current EndDate:', task.EndDate)
+      
+      // フォーマット済み日付を更新
+      const startDate = task.StartDate
+      const endDate = task.EndDate
+      
+      if (startDate) {
+        task.StartDateFormatted = `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}`
+      }
+      
+      if (endDate) {
+        task.EndDateFormatted = `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}`
+      }
+      
+      console.log('New StartDateFormatted:', task.StartDateFormatted)
+      console.log('New EndDateFormatted:', task.EndDateFormatted)
+      
+      // processedData内の対応するタスクも更新
+      const updateProcessedTask = (tasks) => {
+        for (let i = 0; i < tasks.length; i++) {
+          if (tasks[i].TaskID === task.TaskID) {
+            tasks[i].StartDateFormatted = task.StartDateFormatted
+            tasks[i].EndDateFormatted = task.EndDateFormatted
+            tasks[i].StartDate = task.StartDate
+            tasks[i].EndDate = task.EndDate
+            console.log('Updated processed task date labels:', tasks[i])
+            return true
+          }
+          
+          if (tasks[i].subtasks && updateProcessedTask(tasks[i].subtasks)) {
+            return true
+          }
+        }
+        return false
+      }
+      
+      updateProcessedTask(this.processedData)
+      
+      // ガントチャートのデータソースを強制的に更新
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          // データソースを再設定してラベルを更新
+          ganttInstance.dataSource = [...this.processedData]
+        }
+      })
     },
     
     // スケール変更メソッド
