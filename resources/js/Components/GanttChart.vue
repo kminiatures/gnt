@@ -582,8 +582,19 @@ export default {
       // 重複実行を防ぐためのフラグを設定
       this.rowDropProcessed = true
       
+      console.log('About to call handleRowDrop with:', {
+        droppedTaskName: droppedTask.TaskName,
+        targetTaskName: targetTask?.TaskName,
+        dropPosition,
+        droppedTaskID: droppedTask.TaskID,
+        targetTaskID: targetTask?.TaskID
+      })
+      
       try {
         await this.handleRowDrop(droppedTask, targetTask, dropPosition)
+        console.log('handleRowDrop completed successfully')
+      } catch (error) {
+        console.error('Error in handleRowDrop:', error)
       } finally {
         // 処理完了後にフラグをリセット
         setTimeout(() => {
@@ -597,16 +608,22 @@ export default {
       
       // 自分自身にドロップしようとした場合は無視
       if (droppedTask.TaskID === targetTask?.TaskID) {
+        console.log('Ignoring drop: same task')
         return
       }
       
       // 子タスクを親タスクにドロップしようとした場合は無視（循環参照防止）
       if (this.isDescendant(targetTask, droppedTask)) {
+        console.log('Ignoring drop: would create circular reference')
         return
       }
       
       // API呼び出しでタスクの並び順を更新
-      await this.updateTaskOrder(droppedTask, targetTask, dropPosition)
+      try {
+        await this.updateTaskOrder(droppedTask, targetTask, dropPosition)
+      } catch (error) {
+        console.error('Error in updateTaskOrder:', error)
+      }
     },
     async updateTaskOrder(droppedTask, targetTask, dropPosition) {
       try {
@@ -767,7 +784,7 @@ export default {
                          hasChildrenInProcessedData
       
       console.log('hasChildren result:', hasChildren)
-      return hasChildren || false  // 明示的にfalseを返す
+      return Boolean(hasChildren)  // 明示的にbooleanに変換
     },
     
     // 循環参照チェック：targetTaskがdroppedTaskの子孫かどうか
