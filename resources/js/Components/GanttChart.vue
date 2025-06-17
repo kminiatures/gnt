@@ -617,9 +617,9 @@ export default {
     async updateTaskOrder(droppedTask, targetTask, dropPosition) {
       try {
         let newParentId = null
-        let newSortOrder = 1
+        let insertIndex = 0
         
-        // ドロップ位置に応じて親IDと並び順を決定
+        // ドロップ位置に応じて親IDと挿入位置を決定
         console.log('Checking drop conditions:', {
           dropPosition,
           targetTask: targetTask?.TaskName,
@@ -631,47 +631,47 @@ export default {
           console.log('Branch: child drop')
           // 子タスクとして追加（グループの下に移動）
           newParentId = targetTask.TaskID
-          newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
+          insertIndex = this.getChildrenCount(targetTask.TaskID) // 最後に追加
           
         } else if (dropPosition === 'middleSegment' && targetTask && !targetTask.ParentID && this.hasChildren(targetTask)) {
           console.log('Branch: middleSegment on root task with children - treating as child drop')
-          // middleSegmentでルートタスク（親を持たないタスク）へのドロップで、かつターゲットが子タスクを持つ場合のみ子タスクとして扱う
+          // middleSegmentでルートタスクへのドロップで、かつターゲットが子タスクを持つ場合のみ子タスクとして扱う
           newParentId = targetTask.TaskID
-          newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
-          
-        } else if (dropPosition === 'middleSegment' && targetTask && !this.hasChildren(targetTask)) {
-          console.log('Branch: middleSegment on leaf task - treating as sibling insertion')
-          // middleSegmentでリーフタスク（子を持たないタスク）へのドロップは同レベル挿入として扱う
-          newParentId = targetTask.ParentID || null
-          newSortOrder = (targetTask.sort_order || 1) + 0.5
+          insertIndex = this.getChildrenCount(targetTask.TaskID) // 最後に追加
           
         } else if (targetTask) {
           console.log('Branch: sibling insertion')
           // 同レベルに挿入
           newParentId = targetTask.ParentID || null
           
+          // ターゲットタスクの現在の表示位置を取得
+          const targetIndex = this.getTaskDisplayIndex(targetTask, newParentId)
+          
           if (dropPosition === 'topSegment') {
             // ターゲットの上に挿入
-            newSortOrder = Math.max(1, (targetTask.sort_order || 1) - 0.5)
+            insertIndex = targetIndex
           } else {
-            // ターゲットの下に挿入（bottomSegmentまたはmiddleSegment）
-            newSortOrder = (targetTask.sort_order || 1) + 0.5
+            // ターゲットの下に挿入（bottomSegment、middleSegment）
+            insertIndex = targetIndex + 1
           }
           
           console.log('Sibling insertion:', {
             targetTaskName: targetTask.TaskName,
-            targetSortOrder: targetTask.sort_order,
             targetParentID: targetTask.ParentID,
             newParentId,
-            newSortOrder,
+            targetIndex,
+            insertIndex,
             dropPosition
           })
         } else {
           console.log('Branch: root level (no target task)')
           // ルートレベルに移動（ターゲットタスクがない場合）
           newParentId = null
-          newSortOrder = this.getNextRootSortOrder()
+          insertIndex = this.getRootTasksCount() // ルートレベルの最後に追加
         }
+        
+        // 新しいsort_orderを計算
+        const newSortOrder = this.calculateNewSortOrder(newParentId, insertIndex)
         
         // 元の親タスクのIDを保存（親タスクの日付更新用）
         const oldParentId = droppedTask.ParentID
@@ -679,7 +679,7 @@ export default {
         // APIでタスクを更新
         const updateData = {
           parent_id: newParentId,
-          sort_order: Math.round(newSortOrder * 10) / 10 // 小数点第1位まで
+          sort_order: newSortOrder
         }
         
         // nullの場合はnullを明示的に送信
@@ -687,21 +687,8 @@ export default {
           updateData.parent_id = null
         }
         
-        console.log('Updating task:', droppedTask.TaskName, 'parent_id:', oldParentId, '→', newParentId)
+        console.log('Updating task:', droppedTask.TaskName, 'parent_id:', oldParentId, '→', newParentId, 'sort_order:', newSortOrder)
         console.log('Update data being sent:', updateData)
-        
-        // デバッグ: parent_idの変更を明確にログ出力
-        if (oldParentId !== newParentId) {
-          if (oldParentId && !newParentId) {
-            console.log('🔄 Moving to root level: removing parent_id')
-          } else if (!oldParentId && newParentId) {
-            console.log('🔄 Becoming child task: setting parent_id to', newParentId)
-          } else if (oldParentId && newParentId) {
-            console.log('🔄 Changing parent: from', oldParentId, 'to', newParentId)
-          }
-        } else {
-          console.log('🔄 Parent unchanged, only reordering')
-        }
         
         const response = await fetch(`/api/tasks/${droppedTask.TaskID}`, {
           method: 'PUT',
@@ -716,7 +703,10 @@ export default {
         
         if (response.ok) {
           const result = await response.json()
-          console.log('Task updated - new parent_id:', result.parent_id)
+          console.log('Task updated - new parent_id:', result.parent_id, 'new sort_order:', result.sort_order)
+          
+          // 並び順が変更された場合、同じ親の他のタスクの並び順も更新
+          await this.reorderSiblingTasks(newParentId, droppedTask.TaskID, insertIndex)
           
           // 新旧の親タスクの日付を更新
           await this.updateParentTasksAfterMove(oldParentId, newParentId)
@@ -724,7 +714,7 @@ export default {
           // ガントチャートのデータを更新
           setTimeout(() => {
             this.refreshGanttData()
-          }, 200) // 親タスク更新後に遅延
+          }, 300) // 並び順更新も含めて少し長めの遅延
         } else {
           console.error('Failed to update task order:', response.status)
           const errorData = await response.json()
@@ -806,27 +796,150 @@ export default {
       return findTask(this.processedData)
     },
     
-    // 特定の親タスクの子タスクの次のsort_orderを取得
-    getNextChildSortOrder(parentId) {
-      let maxOrder = 0
+    // 指定された親の子タスク数を取得
+    getChildrenCount(parentId) {
+      let count = 0
       
-      const findChildMaxOrder = (tasks) => {
+      const countChildren = (tasks) => {
         tasks.forEach(task => {
           if (task.ParentID === parentId) {
-            const currentOrder = task.sort_order || 0
-            maxOrder = Math.max(maxOrder, currentOrder)
-            console.log('Child task of parent', parentId, ':', task.TaskName, 'sort_order:', currentOrder)
+            count++
           }
           if (task.subtasks && task.subtasks.length > 0) {
-            findChildMaxOrder(task.subtasks)
+            countChildren(task.subtasks)
           }
         })
       }
       
-      findChildMaxOrder(this.processedData)
-      const nextOrder = maxOrder + 1
-      console.log('Next child sort order for parent', parentId, ':', nextOrder, '(max was', maxOrder, ')')
-      return nextOrder
+      countChildren(this.processedData)
+      return count
+    },
+    
+    // ルートレベルタスクの数を取得
+    getRootTasksCount() {
+      return this.processedData.filter(task => !task.ParentID).length
+    },
+    
+    // 指定されたタスクの表示位置インデックスを取得
+    getTaskDisplayIndex(targetTask, parentId) {
+      let index = 0
+      
+      if (parentId === null) {
+        // ルートレベルでの位置を検索
+        for (let i = 0; i < this.processedData.length; i++) {
+          if (this.processedData[i].TaskID === targetTask.TaskID) {
+            return i
+          }
+          if (!this.processedData[i].ParentID) {
+            index++
+          }
+        }
+      } else {
+        // 特定の親の子タスクでの位置を検索
+        const findIndex = (tasks) => {
+          for (const task of tasks) {
+            if (task.ParentID === parentId) {
+              if (task.TaskID === targetTask.TaskID) {
+                return true
+              }
+              index++
+            }
+            if (task.subtasks && task.subtasks.length > 0) {
+              if (findIndex(task.subtasks)) {
+                return true
+              }
+            }
+          }
+          return false
+        }
+        
+        findIndex(this.processedData)
+      }
+      
+      return index
+    },
+    
+    // 新しいsort_orderを計算（挿入位置に基づく）
+    calculateNewSortOrder(parentId, insertIndex) {
+      const siblings = this.getSiblingTasks(parentId)
+      
+      // sort_orderでソート
+      siblings.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      
+      if (insertIndex === 0) {
+        // 最初に挿入
+        return siblings.length > 0 ? Math.max(1, (siblings[0].sort_order || 1) - 1) : 1
+      } else if (insertIndex >= siblings.length) {
+        // 最後に挿入
+        return siblings.length > 0 ? (siblings[siblings.length - 1].sort_order || 0) + 1 : 1
+      } else {
+        // 中間に挿入
+        const prevOrder = siblings[insertIndex - 1]?.sort_order || 0
+        const nextOrder = siblings[insertIndex]?.sort_order || (prevOrder + 2)
+        return prevOrder + ((nextOrder - prevOrder) / 2)
+      }
+    },
+    
+    // 同じ親を持つタスクのリストを取得
+    getSiblingTasks(parentId) {
+      const siblings = []
+      
+      const findSiblings = (tasks) => {
+        tasks.forEach(task => {
+          if (task.ParentID === parentId) {
+            siblings.push(task)
+          }
+          if (task.subtasks && task.subtasks.length > 0) {
+            findSiblings(task.subtasks)
+          }
+        })
+      }
+      
+      findSiblings(this.processedData)
+      return siblings
+    },
+    
+    // 兄弟タスクの並び順を再調整
+    async reorderSiblingTasks(parentId, excludeTaskId, insertIndex) {
+      const siblings = this.getSiblingTasks(parentId).filter(task => task.TaskID !== excludeTaskId)
+      
+      if (siblings.length === 0) return
+      
+      // sort_orderでソート
+      siblings.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      
+      // 新しいsort_orderを順番に割り当て
+      const updates = []
+      for (let i = 0; i < siblings.length; i++) {
+        const newOrder = (i + 1) * 10 // 10, 20, 30, ... の間隔で設定
+        if (siblings[i].sort_order !== newOrder) {
+          updates.push({
+            taskId: siblings[i].TaskID,
+            sort_order: newOrder
+          })
+        }
+      }
+      
+      // 一括でAPIを呼び出して更新
+      if (updates.length > 0) {
+        console.log('Reordering sibling tasks:', updates)
+        try {
+          for (const update of updates) {
+            await fetch(`/api/tasks/${update.taskId}`, {
+              method: 'PUT',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({ sort_order: update.sort_order }),
+            })
+          }
+        } catch (error) {
+          console.error('Error reordering sibling tasks:', error)
+        }
+      }
     },
     
     // ルートレベルタスクの次のsort_orderを取得
