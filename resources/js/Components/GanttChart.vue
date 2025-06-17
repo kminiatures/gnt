@@ -554,17 +554,27 @@ export default {
         let newSortOrder = 1
         
         // ドロップ位置に応じて親IDと並び順を決定
+        console.log('Checking drop conditions:', {
+          dropPosition,
+          targetTask: targetTask?.TaskName,
+          targetTaskId: targetTask?.TaskID,
+          hasChildren: targetTask ? this.hasChildren(targetTask) : false
+        })
+        
         if (dropPosition === 'child' && targetTask) {
+          console.log('Branch: child drop')
           // 子タスクとして追加（グループの下に移動）
           newParentId = targetTask.TaskID
           newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
           
-        } else if (dropPosition === 'middleSegment' && targetTask && this.hasChildren(targetTask)) {
-          // middleSegmentでもターゲットが親タスク（子タスクを持つ）の場合は子タスクとして扱う
+        } else if (dropPosition === 'middleSegment' && targetTask && !targetTask.ParentID) {
+          console.log('Branch: middleSegment on root task - treating as child drop')
+          // middleSegmentでルートタスク（親を持たないタスク）へのドロップは子タスクとして扱う
           newParentId = targetTask.TaskID
           newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
           
         } else if (targetTask) {
+          console.log('Branch: sibling insertion')
           // 同レベルに挿入
           newParentId = targetTask.ParentID || null
           
@@ -576,6 +586,7 @@ export default {
             newSortOrder = (targetTask.sort_order || 1) + 0.5
           }
         } else {
+          console.log('Branch: root level')
           // ルートレベルに移動
           newParentId = null
           newSortOrder = this.getNextRootSortOrder()
@@ -631,11 +642,43 @@ export default {
     
     // タスクが子タスクを持つかどうかをチェック
     hasChildren(task) {
+      console.log('hasChildren check for task:', task.TaskName, {
+        subtasks: task.subtasks?.length || 0,
+        hasChildRecords: task.hasChildRecords,
+        ganttProperties: task.ganttProperties?.hasChildRecords,
+        childRecords: task.childRecords?.length || 0,
+        taskData: task.taskData?.subtasks?.length || 0
+      })
+      
+      // processedDataから同じTaskIDを持つタスクを検索して子タスクの有無を確認
+      const findTaskInProcessedData = (data, taskId) => {
+        for (const item of data) {
+          if (item.TaskID === taskId) {
+            return item
+          }
+          if (item.subtasks && item.subtasks.length > 0) {
+            const found = findTaskInProcessedData(item.subtasks, taskId)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      
+      const processedTask = findTaskInProcessedData(this.processedData, task.TaskID)
+      const hasChildrenInProcessedData = processedTask && processedTask.subtasks && processedTask.subtasks.length > 0
+      
+      console.log('processedTask found:', processedTask?.TaskName, 'hasSubtasks:', hasChildrenInProcessedData)
+      
       // Syncfusionガントチャートでは、子タスクはsubtasksまたは別のプロパティに格納される
-      return (task.subtasks && task.subtasks.length > 0) ||
-             (task.hasChildRecords) ||
-             (task.ganttProperties && task.ganttProperties.hasChildRecords) ||
-             (task.childRecords && task.childRecords.length > 0)
+      const hasChildren = (task.subtasks && task.subtasks.length > 0) ||
+                         (task.hasChildRecords) ||
+                         (task.ganttProperties && task.ganttProperties.hasChildRecords) ||
+                         (task.childRecords && task.childRecords.length > 0) ||
+                         (task.taskData && task.taskData.subtasks && task.taskData.subtasks.length > 0) ||
+                         hasChildrenInProcessedData
+      
+      console.log('hasChildren result:', hasChildren)
+      return hasChildren || false  // 明示的にfalseを返す
     },
     
     // 循環参照チェック：targetTaskがdroppedTaskの子孫かどうか
