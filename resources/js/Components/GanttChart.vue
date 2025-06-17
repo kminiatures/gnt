@@ -718,6 +718,9 @@ export default {
           // 新旧の親タスクの日付を更新
           await this.updateParentTasksAfterMove(oldParentId, newParentId)
           
+          // ガントチャートのデータソースを更新して表示を同期
+          await this.updateGanttDataSourceEfficient(droppedTask.TaskID, result)
+          
         } else {
           console.error('Failed to update task:', response.status)
           // エラーの場合は元の状態に戻す
@@ -833,6 +836,134 @@ export default {
       
       const maxOrder = Math.max(...childTasks.map(task => task.sort_order || 0))
       return maxOrder + 10
+    },
+    
+    // 効率的なガントチャートデータソース更新（特定タスクのみ）
+    async updateGanttDataSourceEfficient(taskId, updatedTaskData) {
+      if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
+        return
+      }
+      
+      try {
+        const ganttInstance = this.$refs.gantt.ej2Instances
+        
+        // 現在の選択状態とスクロール位置を保存
+        const selectedRowIndex = ganttInstance.selectedRowIndex
+        const scrollLeft = ganttInstance.ganttChartModule?.chartBodyContainer?.scrollLeft || 0
+        
+        // SyncfusionのupdateRecordByIDメソッドを使用して特定のレコードを更新
+        const updatedRecord = {
+          TaskID: updatedTaskData.id,
+          TaskName: updatedTaskData.name,
+          ParentID: updatedTaskData.parent_id,
+          sort_order: updatedTaskData.sort_order,
+          StartDate: updatedTaskData.start_date ? new Date(updatedTaskData.start_date) : null,
+          EndDate: updatedTaskData.end_date ? new Date(updatedTaskData.end_date) : null,
+          Duration: updatedTaskData.duration,
+          Progress: updatedTaskData.progress || 0
+        }
+        
+        // フォーマット済み日付も更新
+        if (updatedRecord.StartDate) {
+          updatedRecord.StartDateFormatted = `${String(updatedRecord.StartDate.getMonth() + 1).padStart(2, '0')}/${String(updatedRecord.StartDate.getDate()).padStart(2, '0')}`
+        }
+        if (updatedRecord.EndDate) {
+          updatedRecord.EndDateFormatted = `${String(updatedRecord.EndDate.getMonth() + 1).padStart(2, '0')}/${String(updatedRecord.EndDate.getDate()).padStart(2, '0')}`
+        }
+        
+        // processedDataも更新
+        this.updateTaskInProcessedData(updatedRecord)
+        
+        // SyncfusionのupdateRecordByIDを使用
+        if (ganttInstance.updateRecordByID) {
+          ganttInstance.updateRecordByID(updatedRecord)
+        } else {
+          // フォールバック：データソース全体を更新
+          ganttInstance.dataSource = [...this.processedData]
+        }
+        
+        // 少し遅延させて選択状態とスクロール位置を復元
+        setTimeout(() => {
+          try {
+            if (selectedRowIndex >= 0) {
+              ganttInstance.selectedRowIndex = selectedRowIndex
+            }
+            
+            if (ganttInstance.ganttChartModule?.chartBodyContainer) {
+              ganttInstance.ganttChartModule.chartBodyContainer.scrollLeft = scrollLeft
+            }
+          } catch (error) {
+            console.warn('Failed to restore selection/scroll state:', error)
+          }
+        }, 100)
+        
+        console.log('Gantt data source updated efficiently')
+        
+      } catch (error) {
+        console.error('Error in efficient update, falling back to full refresh:', error)
+        // エラーの場合は完全なデータソース更新にフォールバック
+        await this.updateGanttDataSource()
+      }
+    },
+    
+    // ガントチャートのデータソースを更新
+    async updateGanttDataSource() {
+      if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
+        return
+      }
+      
+      try {
+        // 最新のデータを取得
+        const response = await fetch(`/api/projects/${this.projectId}/gantt`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        })
+        
+        if (response.ok) {
+          const freshData = await response.json()
+          
+          // processedDataを更新
+          this.processedData = this.processGanttData(freshData)
+          
+          // Syncfusionガントチャートのデータソースを更新
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          
+          // 現在の選択状態とスクロール位置を保存
+          const selectedRowIndex = ganttInstance.selectedRowIndex
+          const scrollLeft = ganttInstance.ganttChartModule?.chartBodyContainer?.scrollLeft || 0
+          
+          // データソースを更新
+          ganttInstance.dataSource = this.processedData
+          
+          // 次のティックで選択状態とスクロール位置を復元
+          this.$nextTick(() => {
+            try {
+              if (selectedRowIndex >= 0 && selectedRowIndex < this.processedData.length) {
+                ganttInstance.selectedRowIndex = selectedRowIndex
+              }
+              
+              if (ganttInstance.ganttChartModule?.chartBodyContainer) {
+                ganttInstance.ganttChartModule.chartBodyContainer.scrollLeft = scrollLeft
+              }
+            } catch (error) {
+              console.warn('Failed to restore selection/scroll state:', error)
+            }
+          })
+          
+          console.log('Gantt data source updated successfully')
+        } else {
+          console.error('Failed to fetch fresh data:', response.status)
+          // フォールバックとして完全リロード
+          this.refreshGanttData()
+        }
+      } catch (error) {
+        console.error('Error updating gantt data source:', error)
+        // フォールバックとして完全リロード
+        this.refreshGanttData()
+      }
     },
     
     
