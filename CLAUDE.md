@@ -3,8 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 * いつも日本語で回答してください。
-* ガントチャートライブラリのドキュメントは https://ej2.syncfusion.com/vue/documentation/gantt で、参照してOKです。
-
+* ガントチャートライブラリ "@syncfusion/ej2-vue-gantt" については、まずドキュメント https://ej2.syncfusion.com/vue/documentation/gantt を探して正しい実装方法を見つけます。
 
 ## プロジェクト概要
 
@@ -95,6 +94,9 @@ PHP 8.2+を使用したLaravel 12アプリケーションで、以下の主要�
 - `php artisan route:cache` - ルートをキャッシュ
 - `php artisan event:cache` - イベントをキャッシュ
 - `composer dump-autoload --optimize` - オートローダーを最適化
+
+### DB
+- `sail mariadb` - mariadb クライアントに接続できます
 
 ## アーキテクチャ
 

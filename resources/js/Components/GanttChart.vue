@@ -312,7 +312,7 @@ export default {
       immediate: true,
       handler(newData) {
         if (newData && newData.length > 0) {
-          this.processedData = this.processGanttData(newData)
+          this.processedData = this.buildHierarchicalGanttData(newData)
         }
       }
     },
@@ -321,7 +321,7 @@ export default {
       handler(newLabelSettings) {
         // ラベル設定変更時にもデータを再処理
         if (this.data && this.data.length > 0) {
-          this.processedData = this.processGanttData(this.data)
+          this.processedData = this.buildHierarchicalGanttData(this.data)
         }
         
         this.updateLabelsPreservingZoom()
@@ -330,6 +330,65 @@ export default {
     }
   },
   methods: {
+    // 階層データを正しくSyncfusion用のフラット構造に変換
+    buildHierarchicalGanttData(data) {
+      const flatData = []
+      
+      const processTask = (item, parentId = null) => {
+        const startDate = item.StartDate ? new Date(item.StartDate) : null
+        const endDate = item.EndDate ? new Date(item.EndDate) : null
+        
+        let duration = 1
+        if (startDate && endDate) {
+          const diffTime = endDate.getTime() - startDate.getTime()
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          duration = Math.max(1, diffDays + 1)
+        } else if (item.Duration) {
+          duration = Math.max(1, parseInt(item.Duration))
+        }
+        
+        // 子タスクの場合は「+ 」プレフィックスを追加
+        const taskName = item.TaskName || 'Untitled Task'
+        const displayTaskName = parentId ? `+ ${taskName}` : taskName
+
+        const processedItem = {
+          TaskID: item.TaskID,
+          TaskName: displayTaskName,
+          StartDate: startDate,
+          EndDate: endDate,
+          Duration: duration,
+          Progress: Math.max(0, Math.min(100, parseInt(item.Progress) || 0)),
+          Predecessor: item.Predecessor || null,
+          ParentID: parentId,
+          sort_order: item.sort_order || 0,
+          StartDateFormatted: startDate ? 
+            `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
+          EndDateFormatted: endDate ? 
+            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : ''
+        }
+
+        // フラットリストに追加
+        flatData.push(processedItem)
+
+        // 子タスクがある場合は再帰的に処理
+        if (item.subtasks && item.subtasks.length > 0) {
+          // sort_orderでソート
+          const sortedSubtasks = [...item.subtasks].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+          sortedSubtasks.forEach(child => {
+            processTask(child, item.TaskID)
+          })
+        }
+      }
+      
+      // ルートレベルのタスクをsort_orderでソート
+      const sortedRootTasks = [...data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+      sortedRootTasks.forEach(task => {
+        processTask(task)
+      })
+      
+      return flatData
+    },
+    
     processGanttData(data, parentId = null) {
       return data.map(item => {
         const startDate = item.StartDate ? new Date(item.StartDate) : null
@@ -718,8 +777,9 @@ export default {
           // 新旧の親タスクの日付を更新
           await this.updateParentTasksAfterMove(oldParentId, newParentId)
           
-          // ガントチャートのデータソースを更新して表示を同期
-          await this.updateGanttDataSourceEfficient(droppedTask.TaskID, result)
+          // ガントチャートのデータソースを完全に更新して表示を同期
+          // 親子関係が変更される場合は階層構造の再構築が必要
+          await this.updateGanttDataSource()
           
         } else {
           console.error('Failed to update task:', response.status)
@@ -925,33 +985,54 @@ export default {
         if (response.ok) {
           const freshData = await response.json()
           
-          // processedDataを更新
-          this.processedData = this.processGanttData(freshData)
+          // processedDataを更新（階層データを正しくフラット化）
+          this.processedData = this.buildHierarchicalGanttData(freshData)
           
           // Syncfusionガントチャートのデータソースを更新
           const ganttInstance = this.$refs.gantt.ej2Instances
           
-          // 現在の選択状態とスクロール位置を保存
+          // 現在の状態を保存
           const selectedRowIndex = ganttInstance.selectedRowIndex
           const scrollLeft = ganttInstance.ganttChartModule?.chartBodyContainer?.scrollLeft || 0
+          
+          // 展開・折り畳み状態を保存
+          const expandedItems = []
+          if (ganttInstance.currentViewData) {
+            ganttInstance.currentViewData.forEach(item => {
+              if (item.expanded) {
+                expandedItems.push(item.TaskID)
+              }
+            })
+          }
           
           // データソースを更新
           ganttInstance.dataSource = this.processedData
           
-          // 次のティックで選択状態とスクロール位置を復元
-          this.$nextTick(() => {
+          // 少し遅延させて状態を復元
+          setTimeout(() => {
             try {
+              // 展開状態を復元
+              expandedItems.forEach(taskId => {
+                try {
+                  ganttInstance.expandByID(taskId)
+                } catch (err) {
+                  console.warn('Failed to expand task:', taskId, err)
+                }
+              })
+              
+              // 選択状態を復元
               if (selectedRowIndex >= 0 && selectedRowIndex < this.processedData.length) {
                 ganttInstance.selectedRowIndex = selectedRowIndex
               }
               
+              // スクロール位置を復元
               if (ganttInstance.ganttChartModule?.chartBodyContainer) {
                 ganttInstance.ganttChartModule.chartBodyContainer.scrollLeft = scrollLeft
               }
             } catch (error) {
-              console.warn('Failed to restore selection/scroll state:', error)
+              console.warn('Failed to restore UI state:', error)
             }
-          })
+          }, 200)
           
           console.log('Gantt data source updated successfully')
         } else {
