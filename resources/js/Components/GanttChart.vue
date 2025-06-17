@@ -98,6 +98,16 @@
       :timelineSettings="timelineSettings"
       :labelSettings="labelSettings"
       :allowRowDragAndDrop="true"
+      :allowSelection="true"
+      :allowSorting="true"
+      :allowReordering="true"
+      :enableCollapseAll="true"
+      :collapseAllParentTasks="false"
+      :treeColumnIndex="1"
+      :showColumnMenu="false"
+      :allowFiltering="false"
+      :rowHeight="36"
+      :enableVirtualization="false"
       :projectStartDate="null"
       :projectEndDate="null"
       :dateFormat="'yyyy-MM-dd'"
@@ -116,8 +126,38 @@
   </div>
 </template>
 
+<style scoped>
+/* ガントチャート階層表示の改善 */
+:deep(.e-gantt .e-gridheader .e-table .e-columnheader:nth-child(2)) {
+  padding-left: 8px;
+}
+
+/* 親タスクの強調表示 */
+:deep(.e-gantt .e-gridcontent .e-table .e-row[aria-expanded="true"] .e-rowcell:nth-child(2)) {
+  font-weight: 600;
+}
+
+/* 子タスクのインデント */
+:deep(.e-gantt .e-gridcontent .e-table .e-row .e-rowcell .e-treecell) {
+  padding-left: 4px;
+}
+
+/* 展開/折り畳み三角のスタイル */
+:deep(.e-gantt .e-treegridexpand),
+:deep(.e-gantt .e-treegridcollapse) {
+  cursor: pointer;
+  font-size: 12px;
+  color: #666;
+}
+
+:deep(.e-gantt .e-treegridexpand:hover),
+:deep(.e-gantt .e-treegridcollapse:hover) {
+  color: #333;
+}
+</style>
+
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -173,10 +213,16 @@ export default {
         allowDragAndDrop: true,
         mode: 'Auto'
       },
-      toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel', 'ZoomIn', 'ZoomOut', 'ZoomToFit', 'PrevTimeSpan', 'NextTimeSpan'],
+      toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel', 'ExpandAll', 'CollapseAll', 'ZoomIn', 'ZoomOut', 'ZoomToFit', 'PrevTimeSpan', 'NextTimeSpan'],
       columns: [
         { field: 'TaskID', visible: false },
-        { field: 'TaskName', headerText: 'タスク名', width: '250' },
+        { 
+          field: 'TaskName', 
+          headerText: 'タスク名', 
+          width: '280',
+          allowSorting: true,
+          allowReordering: false
+        },
         { 
           field: 'StartDate', 
           headerText: '開始日', 
@@ -242,7 +288,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder]
   },
   watch: {
     data: {
@@ -267,7 +313,7 @@ export default {
     }
   },
   methods: {
-    processGanttData(data) {
+    processGanttData(data, parentId = null) {
       return data.map(item => {
         const startDate = item.StartDate ? new Date(item.StartDate) : null
         const endDate = item.EndDate ? new Date(item.EndDate) : null
@@ -278,20 +324,23 @@ export default {
           const diffTime = endDate.getTime() - startDate.getTime()
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
           duration = Math.max(1, diffDays + 1) // +1 for inclusive end date
-          console.log(`Duration calculation: ${endDate.toISOString().split('T')[0]} - ${startDate.toISOString().split('T')[0]} = ${duration} days`)
         } else if (item.Duration) {
           duration = Math.max(1, parseInt(item.Duration))
         }
         
+        // 子タスクの場合は「+ 」プレフィックスを追加
+        const taskName = item.TaskName || 'Untitled Task'
+        const displayTaskName = parentId ? `+ ${taskName}` : taskName
+
         const processedItem = {
           TaskID: item.TaskID,
-          TaskName: item.TaskName || 'Untitled Task',
+          TaskName: displayTaskName,
           StartDate: startDate,
           EndDate: endDate,
           Duration: duration,
           Progress: Math.max(0, Math.min(100, parseInt(item.Progress) || 0)),
           Predecessor: item.Predecessor || null,
-          ParentID: item.ParentID || null,
+          ParentID: parentId,
           // フォーマット済み日付フィールドを追加
           StartDateFormatted: startDate ? 
             `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
@@ -300,7 +349,7 @@ export default {
         }
         
         if (item.subtasks && item.subtasks.length > 0) {
-          processedItem.subtasks = this.processGanttData(item.subtasks)
+          processedItem.subtasks = this.processGanttData(item.subtasks, item.TaskID)
         }
         
         return processedItem
@@ -1048,12 +1097,47 @@ export default {
     },
     
     fitToScreen() {
-      console.log('Fitting gantt chart to screen')
-      
       this.$nextTick(() => {
         if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
           const ganttInstance = this.$refs.gantt.ej2Instances
           ganttInstance.fitToProject()
+        }
+      })
+    },
+    
+    // 全ての親タスクを展開
+    expandAll() {
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.expandAll()
+        }
+      })
+    },
+    
+    // 全ての親タスクを折り畳み
+    collapseAll() {
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.collapseAll()
+        }
+      })
+    },
+    
+    // 特定のタスクを展開/折り畳み
+    toggleExpand(taskId) {
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          const record = ganttInstance.getTaskByUniqueID(taskId)
+          if (record) {
+            if (record.expanded) {
+              ganttInstance.collapseByID(taskId)
+            } else {
+              ganttInstance.expandByID(taskId)
+            }
+          }
         }
       })
     },
@@ -1102,7 +1186,6 @@ export default {
               newChartElement.scrollTop = currentScrollTop
             }
             
-            console.log('Zoom state and scroll position restored')
           })
           
         } catch (error) {
