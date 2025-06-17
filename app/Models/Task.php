@@ -160,6 +160,8 @@ class Task extends Model
             'Duration' => $this->calculateDuration(),
             'Progress' => $this->progress ?? 0,
             'Predecessor' => $this->predecessor,
+            'ParentID' => $this->parent_id,
+            'sort_order' => $this->sort_order ?? 0,
             'subtasks' => $this->children->map(fn($child) => $child->toGanttFormat())->toArray(),
         ];
     }

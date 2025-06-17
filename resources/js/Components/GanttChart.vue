@@ -188,6 +188,7 @@ export default {
     return {
       processedData: [],
       saveTimeout: null,
+      rowDropProcessed: false,
       projectSettings: {
         dateFormat: 'yyyy-MM-dd',
         durationUnit: 'Day'
@@ -341,6 +342,7 @@ export default {
           Progress: Math.max(0, Math.min(100, parseInt(item.Progress) || 0)),
           Predecessor: item.Predecessor || null,
           ParentID: parentId,
+          sort_order: item.sort_order || 0,
           // フォーマット済み日付フィールドを追加
           StartDateFormatted: startDate ? 
             `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
@@ -377,6 +379,48 @@ export default {
       // ドラッグ操作のデバッグのみ
       if (args.requestType === 'rowDropped') {
         console.log('Row drop completed:', args)
+        
+        // onRowDropで既に処理済みの場合はスキップ
+        if (this.rowDropProcessed) {
+          console.log('Skip actionComplete processing - already handled by onRowDrop')
+          this.rowDropProcessed = false // フラグをリセット
+          return
+        }
+        
+        // rowDropイベントがうまく動作しない場合のフォールバック
+        if (args.data && args.data.length > 0) {
+          const droppedTask = args.data[0]
+          
+          // actionCompleteイベントからターゲットタスクを取得する方法を改善
+          let targetTask = null
+          let dropPosition = args.dropPosition
+          
+          // fromIndexとdropIndexから推定
+          if (args.dropIndex !== undefined && args.dropIndex >= 0) {
+            // processedDataからdropIndexに対応するタスクを探す
+            const flatTasks = this.getFlatTaskList(this.processedData)
+            if (flatTasks[args.dropIndex]) {
+              targetTask = flatTasks[args.dropIndex]
+              // dropIndexが異なる場合の位置関係を判定
+              if (args.fromIndex < args.dropIndex) {
+                dropPosition = 'bottomSegment'
+              } else {
+                dropPosition = 'topSegment'
+              }
+            }
+          }
+          
+          console.log('Processing row drop in actionComplete:', {
+            droppedTask: droppedTask.TaskName,
+            targetTask: targetTask?.TaskName,
+            dropPosition,
+            fromIndex: args.fromIndex,
+            dropIndex: args.dropIndex
+          })
+          
+          // onRowDropと同じ処理を実行
+          await this.handleRowDrop(droppedTask, targetTask, dropPosition)
+        }
       }
       
       // タスクバーの編集（リサイズ、移動）時にAPIを呼び出す
@@ -533,6 +577,22 @@ export default {
       const targetTask = args.dropRecord // ドロップ先のタスク
       const dropPosition = args.dropPosition // 'topSegment', 'bottomSegment', または 'child'
       
+      console.log('onRowDrop called with args:', args)
+      
+      // 重複実行を防ぐためのフラグを設定
+      this.rowDropProcessed = true
+      
+      try {
+        await this.handleRowDrop(droppedTask, targetTask, dropPosition)
+      } finally {
+        // 処理完了後にフラグをリセット
+        setTimeout(() => {
+          this.rowDropProcessed = false
+        }, 100)
+      }
+    },
+    
+    async handleRowDrop(droppedTask, targetTask, dropPosition) {
       console.log(`Drop: "${droppedTask.TaskName}" to ${dropPosition} of "${targetTask?.TaskName || 'root'}"`)
       
       // 自分自身にドロップしようとした場合は無視
@@ -567,11 +627,17 @@ export default {
           newParentId = targetTask.TaskID
           newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
           
-        } else if (dropPosition === 'middleSegment' && targetTask && !targetTask.ParentID) {
-          console.log('Branch: middleSegment on root task - treating as child drop')
-          // middleSegmentでルートタスク（親を持たないタスク）へのドロップは子タスクとして扱う
+        } else if (dropPosition === 'middleSegment' && targetTask && !targetTask.ParentID && this.hasChildren(targetTask)) {
+          console.log('Branch: middleSegment on root task with children - treating as child drop')
+          // middleSegmentでルートタスク（親を持たないタスク）へのドロップで、かつターゲットが子タスクを持つ場合のみ子タスクとして扱う
           newParentId = targetTask.TaskID
           newSortOrder = this.getNextChildSortOrder(targetTask.TaskID)
+          
+        } else if (dropPosition === 'middleSegment' && targetTask && !this.hasChildren(targetTask)) {
+          console.log('Branch: middleSegment on leaf task - treating as sibling insertion')
+          // middleSegmentでリーフタスク（子を持たないタスク）へのドロップは同レベル挿入として扱う
+          newParentId = targetTask.ParentID || null
+          newSortOrder = (targetTask.sort_order || 1) + 0.5
           
         } else if (targetTask) {
           console.log('Branch: sibling insertion')
@@ -585,9 +651,18 @@ export default {
             // ターゲットの下に挿入（bottomSegmentまたはmiddleSegment）
             newSortOrder = (targetTask.sort_order || 1) + 0.5
           }
+          
+          console.log('Sibling insertion:', {
+            targetTaskName: targetTask.TaskName,
+            targetSortOrder: targetTask.sort_order,
+            targetParentID: targetTask.ParentID,
+            newParentId,
+            newSortOrder,
+            dropPosition
+          })
         } else {
-          console.log('Branch: root level')
-          // ルートレベルに移動
+          console.log('Branch: root level (no target task)')
+          // ルートレベルに移動（ターゲットタスクがない場合）
           newParentId = null
           newSortOrder = this.getNextRootSortOrder()
         }
@@ -607,6 +682,20 @@ export default {
         }
         
         console.log('Updating task:', droppedTask.TaskName, 'parent_id:', oldParentId, '→', newParentId)
+        console.log('Update data being sent:', updateData)
+        
+        // デバッグ: parent_idの変更を明確にログ出力
+        if (oldParentId !== newParentId) {
+          if (oldParentId && !newParentId) {
+            console.log('🔄 Moving to root level: removing parent_id')
+          } else if (!oldParentId && newParentId) {
+            console.log('🔄 Becoming child task: setting parent_id to', newParentId)
+          } else if (oldParentId && newParentId) {
+            console.log('🔄 Changing parent: from', oldParentId, 'to', newParentId)
+          }
+        } else {
+          console.log('🔄 Parent unchanged, only reordering')
+        }
         
         const response = await fetch(`/api/tasks/${droppedTask.TaskID}`, {
           method: 'PUT',
@@ -710,7 +799,9 @@ export default {
       const findChildMaxOrder = (tasks) => {
         tasks.forEach(task => {
           if (task.ParentID === parentId) {
-            maxOrder = Math.max(maxOrder, task.sort_order || 0)
+            const currentOrder = task.sort_order || 0
+            maxOrder = Math.max(maxOrder, currentOrder)
+            console.log('Child task of parent', parentId, ':', task.TaskName, 'sort_order:', currentOrder)
           }
           if (task.subtasks && task.subtasks.length > 0) {
             findChildMaxOrder(task.subtasks)
@@ -719,7 +810,9 @@ export default {
       }
       
       findChildMaxOrder(this.processedData)
-      return maxOrder + 1
+      const nextOrder = maxOrder + 1
+      console.log('Next child sort order for parent', parentId, ':', nextOrder, '(max was', maxOrder, ')')
+      return nextOrder
     },
     
     // ルートレベルタスクの次のsort_orderを取得
@@ -728,11 +821,32 @@ export default {
       
       this.processedData.forEach(task => {
         if (!task.ParentID) {
-          maxOrder = Math.max(maxOrder, task.sort_order || 0)
+          const currentOrder = task.sort_order || 0
+          maxOrder = Math.max(maxOrder, currentOrder)
+          console.log('Root task:', task.TaskName, 'sort_order:', currentOrder)
         }
       })
       
-      return maxOrder + 1
+      const nextOrder = maxOrder + 1
+      console.log('Next root sort order:', nextOrder, '(max was', maxOrder, ')')
+      return nextOrder
+    },
+    
+    // 階層構造のタスクリストをフラットなリストに変換
+    getFlatTaskList(tasks) {
+      const flatList = []
+      
+      const flatten = (taskList) => {
+        taskList.forEach(task => {
+          flatList.push(task)
+          if (task.subtasks && task.subtasks.length > 0) {
+            flatten(task.subtasks)
+          }
+        })
+      }
+      
+      flatten(tasks)
+      return flatList
     },
     
     // タスクバードラッグ時に日付ラベルを更新
