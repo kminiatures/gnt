@@ -582,17 +582,8 @@ export default {
       // 重複実行を防ぐためのフラグを設定
       this.rowDropProcessed = true
       
-      console.log('About to call handleRowDrop with:', {
-        droppedTaskName: droppedTask.TaskName,
-        targetTaskName: targetTask?.TaskName,
-        dropPosition,
-        droppedTaskID: droppedTask.TaskID,
-        targetTaskID: targetTask?.TaskID
-      })
-      
       try {
         await this.handleRowDrop(droppedTask, targetTask, dropPosition)
-        console.log('handleRowDrop completed successfully')
       } catch (error) {
         console.error('Error in handleRowDrop:', error)
       } finally {
@@ -608,13 +599,11 @@ export default {
       
       // 自分自身にドロップしようとした場合は無視
       if (droppedTask.TaskID === targetTask?.TaskID) {
-        console.log('Ignoring drop: same task')
         return
       }
       
       // 子タスクを親タスクにドロップしようとした場合は無視（循環参照防止）
       if (this.isDescendant(targetTask, droppedTask)) {
-        console.log('Ignoring drop: would create circular reference')
         return
       }
       
