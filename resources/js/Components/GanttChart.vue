@@ -757,20 +757,7 @@ export default {
       })
       
       // processedDataから同じTaskIDを持つタスクを検索して子タスクの有無を確認
-      const findTaskInProcessedData = (data, taskId) => {
-        for (const item of data) {
-          if (item.TaskID === taskId) {
-            return item
-          }
-          if (item.subtasks && item.subtasks.length > 0) {
-            const found = findTaskInProcessedData(item.subtasks, taskId)
-            if (found) return found
-          }
-        }
-        return null
-      }
-      
-      const processedTask = findTaskInProcessedData(this.processedData, task.TaskID)
+      const processedTask = this.findTaskInProcessedData(task.TaskID)
       const hasChildrenInProcessedData = processedTask && processedTask.subtasks && processedTask.subtasks.length > 0
       
       console.log('processedTask found:', processedTask?.TaskName, 'hasSubtasks:', hasChildrenInProcessedData)
@@ -787,26 +774,47 @@ export default {
       return Boolean(hasChildren)  // 明示的にbooleanに変換
     },
     
-    // 循環参照チェック：targetTaskがdroppedTaskの子孫かどうか
+    // 循環参照チェック：droppedTaskをtargetTaskの子にすると循環参照になるかどうか
     isDescendant(targetTask, droppedTask) {
       if (!targetTask || !droppedTask) return false
       
-      // 現在のデータから子孫関係をチェック
-      const checkDescendants = (task, ancestorId) => {
-        if (task.TaskID === ancestorId) return true
+      // droppedTaskがtargetTaskの祖先である場合、循環参照になる
+      const isAncestor = (task, potentialDescendantId) => {
+        if (task.TaskID === potentialDescendantId) return true
         
         // 子タスクを再帰的にチェック
         if (task.subtasks && task.subtasks.length > 0) {
-          return task.subtasks.some(child => checkDescendants(child, ancestorId))
+          return task.subtasks.some(child => isAncestor(child, potentialDescendantId))
         }
         
         return false
       }
       
-      return this.processedData.some(rootTask => 
-        checkDescendants(rootTask, droppedTask.TaskID) && 
-        checkDescendants(rootTask, targetTask.TaskID)
-      )
+      // droppedTaskの子孫にtargetTaskが含まれているかチェック
+      const droppedTaskInProcessedData = this.findTaskInProcessedData(droppedTask.TaskID)
+      if (droppedTaskInProcessedData) {
+        return isAncestor(droppedTaskInProcessedData, targetTask.TaskID)
+      }
+      
+      return false
+    },
+    
+    // processedDataからタスクを検索するヘルパーメソッド
+    findTaskInProcessedData(taskId) {
+      const findTask = (tasks) => {
+        for (const task of tasks) {
+          if (task.TaskID === taskId) {
+            return task
+          }
+          if (task.subtasks && task.subtasks.length > 0) {
+            const found = findTask(task.subtasks)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      
+      return findTask(this.processedData)
     },
     
     // 特定の親タスクの子タスクの次のsort_orderを取得
