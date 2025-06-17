@@ -1,5 +1,13 @@
 <template>
-  <div class="gantt-container">
+  <div 
+    ref="ganttContainer"
+    :class="[
+      'gantt-container',
+      {
+        'fullscreen-mode': isFullscreen
+      }
+    ]"
+  >
     <!-- スケール変更コントロール -->
     <div class="scale-controls mb-4 p-3 bg-gray-50 rounded-lg border">
       <div class="flex items-center space-x-4">
@@ -35,6 +43,13 @@
           class="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           画面に合わせる
+        </button>
+        
+        <button 
+          @click="toggleFullscreen"
+          class="px-3 py-1 bg-gray-500 text-white rounded-md text-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500"
+        >
+          {{ isFullscreen ? '通常表示' : 'フルスクリーン' }}
         </button>
       </div>
       
@@ -189,6 +204,7 @@ export default {
       processedData: [],
       saveTimeout: null,
       rowDropProcessed: false,
+      isFullscreen: false,
       projectSettings: {
         dateFormat: 'yyyy-MM-dd',
         durationUnit: 'Day'
@@ -1389,6 +1405,97 @@ export default {
       })
     },
     
+    // フルスクリーンモードの切り替え
+    toggleFullscreen() {
+      if (this.isFullscreen) {
+        this.exitFullscreen()
+      } else {
+        this.enterFullscreen()
+      }
+    },
+    
+    // フルスクリーンモードに入る
+    enterFullscreen() {
+      const container = this.$refs.ganttContainer
+      
+      if (container.requestFullscreen) {
+        container.requestFullscreen()
+      } else if (container.mozRequestFullScreen) {
+        container.mozRequestFullScreen()
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen()
+      } else if (container.msRequestFullscreen) {
+        container.msRequestFullscreen()
+      } else {
+        // フルスクリーンAPIが利用できない場合は、CSSでの疑似フルスクリーン
+        this.enterPseudoFullscreen()
+      }
+    },
+    
+    // フルスクリーンモードを終了
+    exitFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen()
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen()
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen()
+      } else {
+        // フルスクリーンAPIが利用できない場合は、疑似フルスクリーンを終了
+        this.exitPseudoFullscreen()
+      }
+    },
+    
+    // 疑似フルスクリーンモードに入る（フルスクリーンAPIが利用できない場合）
+    enterPseudoFullscreen() {
+      this.isFullscreen = true
+      document.body.classList.add('overflow-hidden')
+      
+      // ガントチャートのサイズを調整
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.refresh()
+        }
+      })
+    },
+    
+    // 疑似フルスクリーンモードを終了
+    exitPseudoFullscreen() {
+      this.isFullscreen = false
+      document.body.classList.remove('overflow-hidden')
+      
+      // ガントチャートのサイズを調整
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.refresh()
+        }
+      })
+    },
+    
+    // フルスクリーン状態変更イベントのハンドリング
+    handleFullscreenChange() {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        document.mozFullScreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      )
+      
+      this.isFullscreen = isCurrentlyFullscreen
+      
+      // フルスクリーン状態変更時にガントチャートのサイズを調整
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          ganttInstance.refresh()
+        }
+      })
+    },
+    
     // 全ての親タスクを展開
     expandAll() {
       this.$nextTick(() => {
@@ -1637,6 +1744,12 @@ export default {
     // ユーザー設定を読み込み
     await this.loadUserOptions()
     
+    // フルスクリーンイベントリスナーを追加
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.addEventListener('msfullscreenchange', this.handleFullscreenChange)
+    
     if (!this.data || this.data.length === 0) {
       this.processedData = [
         {
@@ -1657,14 +1770,83 @@ export default {
         }
       ]
     }
+  },
+  beforeUnmount() {
+    // フルスクリーンイベントリスナーを削除
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('mozfullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange)
+    document.removeEventListener('msfullscreenchange', this.handleFullscreenChange)
+    
+    // フルスクリーンモードの場合は終了
+    if (this.isFullscreen) {
+      this.exitFullscreen()
+    }
   }
 }
 </script>
 
 <style scoped>
 .gantt-container {
-  width: 100%;
-  margin: 20px 0;
+  position: relative;
+}
+
+/* フルスクリーンモード用のスタイル */
+.fullscreen-mode {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  background: white;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+/* フルスクリーンモード時のガントチャートコンテナの調整 */
+.fullscreen-mode :deep(.e-gantt) {
+  height: calc(100vh - 200px) !important;
+}
+
+/* フルスクリーンAPI使用時のスタイル */
+.gantt-container:fullscreen {
+  padding: 1rem;
+  background: white;
+}
+
+.gantt-container:fullscreen :deep(.e-gantt) {
+  height: calc(100vh - 200px) !important;
+}
+
+/* webkit系ブラウザ対応 */
+.gantt-container:-webkit-full-screen {
+  padding: 1rem;
+  background: white;
+}
+
+.gantt-container:-webkit-full-screen :deep(.e-gantt) {
+  height: calc(100vh - 200px) !important;
+}
+
+/* Mozilla系ブラウザ対応 */
+.gantt-container:-moz-full-screen {
+  padding: 1rem;
+  background: white;
+}
+
+.gantt-container:-moz-full-screen :deep(.e-gantt) {
+  height: calc(100vh - 200px) !important;
+}
+
+/* MS Edge対応 */
+.gantt-container:-ms-fullscreen {
+  padding: 1rem;
+  background: white;
+}
+
+.gantt-container:-ms-fullscreen :deep(.e-gantt) {
+  height: calc(100vh - 200px) !important;
 }
 
 /* スケールコントロールのスタイル */
