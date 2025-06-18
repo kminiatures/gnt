@@ -684,6 +684,9 @@ export default {
             }
           }
           
+          // 日付ラベルを直接更新
+          this.updateTaskDateLabels(task)
+          
           // processedData内のタスクを即座に更新してUIに反映
           this.updateTaskInProcessedData({
             TaskID: task.TaskID,
@@ -696,6 +699,11 @@ export default {
               `${String(task.StartDate.getMonth() + 1).padStart(2, '0')}/${String(task.StartDate.getDate()).padStart(2, '0')}` : '',
             EndDateFormatted: task.EndDate ? 
               `${String(task.EndDate.getMonth() + 1).padStart(2, '0')}/${String(task.EndDate.getDate()).padStart(2, '0')}` : ''
+          })
+          
+          // ガントチャートのラベルを滑らかに更新（チラつき防止）
+          this.$nextTick(() => {
+            this.updateTaskLabelsInGantt(task.TaskID)
           })
           
         } else {
@@ -1247,15 +1255,89 @@ export default {
       
       updateTask(this.processedData)
       
-      // ガントチャートのデータソースも同期
+      // ガントチャートのデータソースを軽量更新（チラつき防止）
       this.$nextTick(() => {
         if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
           const ganttInstance = this.$refs.gantt.ej2Instances
-          // 現在のデータソースを更新（完全な再構築は避ける）
-          const flatData = this.buildHierarchicalGanttData(this.data)
-          ganttInstance.dataSource = flatData
+          
+          try {
+            // 現在のデータソース内の該当タスクを直接更新
+            if (ganttInstance.dataSource && Array.isArray(ganttInstance.dataSource)) {
+              const targetRecord = ganttInstance.dataSource.find(record => record.TaskID === updatedTask.TaskID)
+              if (targetRecord) {
+                Object.assign(targetRecord, updatedTask)
+                
+                // チラつきを避けるため、refresh()は使わずラベルのみ更新
+                this.updateTaskLabelsInGantt(updatedTask.TaskID)
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to update specific record:', error)
+          }
         }
       })
+    },
+    onQueryTaskbarInfo(args) {
+      // タスクバーの描画時にラベルを最新のデータで設定
+      const task = args.data
+      if (task) {
+        // 最新のフォーマット済み日付を設定
+        if (task.StartDate) {
+          task.StartDateFormatted = `${String(task.StartDate.getMonth() + 1).padStart(2, '0')}/${String(task.StartDate.getDate()).padStart(2, '0')}`
+        }
+        if (task.EndDate) {
+          task.EndDateFormatted = `${String(task.EndDate.getMonth() + 1).padStart(2, '0')}/${String(task.EndDate.getDate()).padStart(2, '0')}`
+        }
+      }
+    },
+    
+    // 特定タスクのラベルのみを更新（チラつき防止）
+    updateTaskLabelsInGantt(taskId) {
+      console.log('Updating task labels in gantt for taskId:', taskId)
+      
+      if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
+        return
+      }
+      
+      const ganttInstance = this.$refs.gantt.ej2Instances
+      
+      try {
+        // 該当タスクのデータを取得
+        const taskData = ganttInstance.dataSource.find(record => record.TaskID === taskId)
+        if (!taskData) {
+          console.warn('Task data not found for ID:', taskId)
+          return
+        }
+        
+        // Syncfusionの updateRecordByID を使用してスムーズに更新
+        if (ganttInstance.updateRecordByID) {
+          ganttInstance.updateRecordByID(taskData)
+          console.log('Task updated using updateRecordByID')
+        } else {
+          // フォールバック：DOM要素を直接更新
+          const taskBarElement = ganttInstance.element.querySelector(`[data-task-id="${taskId}"]`)
+          if (taskBarElement) {
+            // 左側ラベル（開始日）を更新
+            const leftLabelElement = taskBarElement.querySelector('.e-taskbar-left-label')
+            if (leftLabelElement && this.labelSettings.leftLabel === 'StartDateFormatted') {
+              leftLabelElement.textContent = taskData.StartDateFormatted || ''
+            }
+            
+            // 右側ラベル（終了日）を更新  
+            const rightLabelElement = taskBarElement.querySelector('.e-taskbar-right-label')
+            if (rightLabelElement && this.labelSettings.rightLabel === 'EndDateFormatted') {
+              rightLabelElement.textContent = taskData.EndDateFormatted || ''
+            }
+            
+            console.log('Task labels updated via DOM manipulation')
+          } else {
+            console.log('Task bar element not found, will update on next render')
+          }
+        }
+        
+      } catch (error) {
+        console.warn('Error updating task labels:', error)
+      }
     },
     
     // 親タスクの日付を子タスクに基づいて更新
