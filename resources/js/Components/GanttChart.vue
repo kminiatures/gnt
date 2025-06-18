@@ -238,22 +238,35 @@ export default {
           headerText: 'タスク名', 
           width: '280',
           allowSorting: true,
-          allowReordering: false
+          allowReordering: false,
+          allowEditing: true
         },
         { 
           field: 'StartDate', 
           headerText: '開始日', 
           width: '100',
-          format: { type: 'date', format: 'MM/dd' }
+          format: { type: 'date', format: 'MM/dd' },
+          allowEditing: true
         },
         { 
           field: 'EndDate', 
           headerText: '終了日', 
           width: '100',
-          format: { type: 'date', format: 'MM/dd' }
+          format: { type: 'date', format: 'MM/dd' },
+          allowEditing: true
         },
-        { field: 'Duration', headerText: '期間', width: '80' },
-        { field: 'Progress', headerText: '進捗', width: '80' },
+        { 
+          field: 'Duration', 
+          headerText: '期間', 
+          width: '80',
+          allowEditing: true
+        },
+        { 
+          field: 'Progress', 
+          headerText: '進捗', 
+          width: '80',
+          allowEditing: true
+        },
         { field: 'StartDateFormatted', visible: false },
         { field: 'EndDateFormatted', visible: false }
       ],
@@ -472,6 +485,13 @@ export default {
         }
       }
       
+      // インライン編集（セル編集）時にDBに保存
+      if (args.requestType === 'save' && args.action === 'CellEditing') {
+        console.log('Cell editing completed:', args)
+        const task = args.data
+        await this.updateTaskFromInlineEdit(task)
+      }
+      
       // タスクバーの編集（リサイズ、移動）時にAPIを呼び出す
       if (args.requestType === 'save' && (
         args.action === 'TaskbarEditing' || 
@@ -614,6 +634,82 @@ export default {
         }
       } catch (error) {
         console.error('Error deleting task:', error)
+      }
+    },
+    async updateTaskFromInlineEdit(task) {
+      console.log('Updating task from inline edit:', task)
+      
+      try {
+        // タスク名から「+ 」プレフィックスを除去
+        const cleanTaskName = task.TaskName ? task.TaskName.replace(/^\+ /, '') : ''
+        
+        const updateData = {
+          name: cleanTaskName,
+          progress: task.Progress || 0
+        }
+        
+        // 日付フィールドが編集された場合は追加
+        if (task.StartDate) {
+          updateData.start_date = this.formatDateToLocal(task.StartDate)
+        }
+        if (task.EndDate) {
+          updateData.end_date = this.formatDateToLocal(task.EndDate)
+        }
+        if (task.Duration) {
+          updateData.duration = parseInt(task.Duration) || 1
+        }
+        
+        console.log('Sending update data:', updateData)
+        
+        const response = await fetch(`/api/tasks/${task.TaskID}`, {
+          method: 'PUT',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(updateData),
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('Task updated successfully from inline edit:', result)
+          
+          // 親タスクの日付を更新（日付が変更された場合）
+          if (updateData.start_date || updateData.end_date) {
+            const updatedParents = result.updated_parents || []
+            if (updatedParents.length > 0) {
+              this.updateParentTasksFromAPI(updatedParents, false)
+            }
+          }
+          
+          // processedData内のタスクを即座に更新してUIに反映
+          this.updateTaskInProcessedData({
+            TaskID: task.TaskID,
+            TaskName: task.TaskName, // プレフィックス付きのまま表示用に保持
+            StartDate: task.StartDate,
+            EndDate: task.EndDate,
+            Duration: task.Duration,
+            Progress: task.Progress,
+            StartDateFormatted: task.StartDate ? 
+              `${String(task.StartDate.getMonth() + 1).padStart(2, '0')}/${String(task.StartDate.getDate()).padStart(2, '0')}` : '',
+            EndDateFormatted: task.EndDate ? 
+              `${String(task.EndDate.getMonth() + 1).padStart(2, '0')}/${String(task.EndDate.getDate()).padStart(2, '0')}` : ''
+          })
+          
+        } else {
+          console.error('Failed to update task from inline edit:', response.status)
+          const errorData = await response.json()
+          console.error('Error details:', errorData)
+          
+          // エラーの場合は元の状態に戻す
+          this.refreshGanttData()
+        }
+      } catch (error) {
+        console.error('Error updating task from inline edit:', error)
+        // エラーの場合は元の状態に戻す
+        this.refreshGanttData()
       }
     },
     refreshGanttData() {
@@ -1127,6 +1223,39 @@ export default {
       // 子タスクのラベル更新時はdataSourceの再設定を避ける
       // ラベルのみの更新なので、データソースの再設定は不要
       console.log('Task date labels updated in processedData')
+    },
+    
+    // processedData内の特定タスクを更新
+    updateTaskInProcessedData(updatedTask) {
+      console.log('Updating task in processed data:', updatedTask)
+      
+      const updateTask = (tasks) => {
+        for (let i = 0; i < tasks.length; i++) {
+          if (tasks[i].TaskID === updatedTask.TaskID) {
+            // 既存のタスクデータを更新
+            Object.assign(tasks[i], updatedTask)
+            console.log('Updated task in processed data:', tasks[i])
+            return true
+          }
+          
+          if (tasks[i].subtasks && updateTask(tasks[i].subtasks)) {
+            return true
+          }
+        }
+        return false
+      }
+      
+      updateTask(this.processedData)
+      
+      // ガントチャートのデータソースも同期
+      this.$nextTick(() => {
+        if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
+          const ganttInstance = this.$refs.gantt.ej2Instances
+          // 現在のデータソースを更新（完全な再構築は避ける）
+          const flatData = this.buildHierarchicalGanttData(this.data)
+          ganttInstance.dataSource = flatData
+        }
+      })
     },
     
     // 親タスクの日付を子タスクに基づいて更新
