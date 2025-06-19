@@ -182,7 +182,7 @@
 </style>
 
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -331,7 +331,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize]
   },
   watch: {
     data: {
@@ -2181,6 +2181,17 @@ export default {
         }
       ]
     }
+    
+    // ガントチャートの初期化を確実にするため、少し遅らせてrefreshを実行
+    this.$nextTick(() => {
+      setTimeout(() => {
+        const ganttInstance = this.$refs.gantt
+        if (ganttInstance && ganttInstance.ej2Instances) {
+          console.log('Initializing Gantt chart with proper modules...')
+          ganttInstance.refresh()
+        }
+      }, 100)
+    })
   },
   beforeUnmount() {
     // フルスクリーンイベントリスナーを削除
