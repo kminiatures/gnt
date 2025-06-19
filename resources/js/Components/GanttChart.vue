@@ -2192,41 +2192,14 @@ export default {
             setTimeout(() => {
               console.log('Re-initializing taskbar editing functionality')
               
-              // タスクバー編集モジュールが存在しない場合は軽量なrefreshを実行
+              // タスクバー編集モジュールが存在しない場合は完全なrefreshを実行
               if (!ganttObj.taskbarEditModule) {
-                console.warn('taskbarEditModule not found, performing lightweight refresh')
+                console.warn('taskbarEditModule not found, performing full refresh to fix initialization')
                 
-                try {
-                  // モジュールの再注入のみ実行（破壊的なrefresh()の代替）
-                  if (ganttObj.moduleLoader && ganttObj.injectedModules) {
-                    ganttObj.moduleLoader.inject(ganttObj.requiredModules(), ganttObj.injectedModules)
-                  }
-                  
-                  // 編集設定を強制的に再適用
-                  ganttObj.editSettings = {
-                    ...ganttObj.editSettings,
-                    allowTaskbarEditing: true,
-                    allowEditing: true,
-                    allowDragAndDrop: true
-                  }
-                  
-                  // タスクバー編集機能を手動で再初期化
-                  if (ganttObj.editModule) {
-                    // Editモジュールを一度破壊して再構築
-                    if (ganttObj.editModule.destroy) {
-                      ganttObj.editModule.destroy()
-                    }
-                    if (ganttObj.editModule.addEventListener) {
-                      ganttObj.editModule.addEventListener()
-                    }
-                  }
-                  
-                } catch (error) {
-                  console.error('Error during lightweight refresh:', error)
-                  // 最後の手段として完全なrefresh
-                  console.log('Falling back to full refresh')
-                  ganttObj.refresh()
-                }
+                // 最も確実な方法：完全なrefresh
+                // ユーザーは一度だけチラつきを経験するが、その後は正常に動作する
+                ganttObj.refresh()
+                console.log('Full refresh completed - taskbar editing should now work')
               } else {
                 // タスクバー編集モジュールのイベントハンドラーを再アタッチ
                 if (ganttObj.taskbarEditModule.destroy) {
