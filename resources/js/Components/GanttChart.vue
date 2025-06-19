@@ -219,6 +219,7 @@ export default {
       pendingDropOperation: null,
       isCreatingTask: false,
       weekendHolidays: [], // 週末holidays用配列
+      fullscreenObserver: null, // フルスクリーン時のポップアップ監視用
       projectSettings: {
         dateFormat: 'yyyy-MM-dd',
         durationUnit: 'Day'
@@ -1866,9 +1867,11 @@ export default {
         if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
           const ganttInstance = this.$refs.gantt.ej2Instances
           
-          // フルスクリーン時はモーダルやポップアップのコンテナを調整
+          // フルスクリーン時はポップアップ監視を開始
           if (isCurrentlyFullscreen) {
-            this.configureFullscreenPopups(ganttInstance)
+            this.startFullscreenPopupObserver()
+          } else {
+            this.stopFullscreenPopupObserver()
           }
           
           ganttInstance.refresh()
@@ -1876,38 +1879,104 @@ export default {
       })
     },
     
-    // フルスクリーン時のポップアップ設定
-    configureFullscreenPopups(ganttInstance) {
-      // Syncfusionコンポーネントのポップアップコンテナを設定
-      if (ganttInstance.element) {
-        const ganttContainer = this.$refs.ganttContainer
-        
-        // モーダルやポップアップの親要素をフルスクリーン要素に設定
-        const popupElements = [
-          '.e-dialog-container',
-          '.e-popup-container', 
-          '.e-contextmenu-container'
-        ]
-        
-        popupElements.forEach(selector => {
-          const elements = document.querySelectorAll(selector)
-          elements.forEach(element => {
-            if (element && !ganttContainer.contains(element)) {
-              ganttContainer.appendChild(element)
+    // フルスクリーン時のポップアップ監視を開始
+    startFullscreenPopupObserver() {
+      if (this.fullscreenObserver) {
+        this.fullscreenObserver.disconnect()
+      }
+
+      const ganttContainer = this.$refs.ganttContainer
+      if (!ganttContainer) return
+
+      console.log('Starting fullscreen popup observer')
+
+      // MutationObserverでDOMの変更を監視
+      this.fullscreenObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // Syncfusionのポップアップ要素を検出
+              const isPopup = node.classList && (
+                node.classList.contains('e-dialog') ||
+                node.classList.contains('e-contextmenu') ||
+                node.classList.contains('e-popup') ||
+                node.classList.contains('e-dlg-overlay') ||
+                node.classList.contains('e-dialog-container')
+              )
+
+              if (isPopup && !ganttContainer.contains(node)) {
+                console.log('Moving popup to fullscreen container:', node.className)
+                try {
+                  ganttContainer.appendChild(node)
+                } catch (error) {
+                  console.error('Error moving popup:', error)
+                }
+              }
+
+              // 子要素もチェック
+              const popupChildren = node.querySelectorAll && node.querySelectorAll('.e-dialog, .e-contextmenu, .e-popup, .e-dlg-overlay')
+              if (popupChildren) {
+                popupChildren.forEach(child => {
+                  if (!ganttContainer.contains(child)) {
+                    console.log('Moving child popup to fullscreen container:', child.className)
+                    try {
+                      ganttContainer.appendChild(child)
+                    } catch (error) {
+                      console.error('Error moving child popup:', error)
+                    }
+                  }
+                })
+              }
             }
           })
         })
-        
-        // Syncfusionのポップアップ設定を調整
-        if (ganttInstance.editModule && ganttInstance.editModule.dialogModule) {
-          const dialogModule = ganttInstance.editModule.dialogModule
-          if (dialogModule.dialog) {
-            dialogModule.dialog.target = ganttContainer
-          }
-        }
-        
-        console.log('Configured popups for fullscreen mode')
+      })
+
+      // document.bodyの変更を監視
+      this.fullscreenObserver.observe(document.body, {
+        childList: true,
+        subtree: true
+      })
+
+      // 既存のポップアップも移動
+      this.moveExistingPopupsToFullscreen()
+    },
+
+    // フルスクリーン時のポップアップ監視を停止
+    stopFullscreenPopupObserver() {
+      if (this.fullscreenObserver) {
+        console.log('Stopping fullscreen popup observer')
+        this.fullscreenObserver.disconnect()
+        this.fullscreenObserver = null
       }
+    },
+
+    // 既存のポップアップをフルスクリーン要素に移動
+    moveExistingPopupsToFullscreen() {
+      const ganttContainer = this.$refs.ganttContainer
+      if (!ganttContainer) return
+
+      const selectors = [
+        '.e-dialog',
+        '.e-contextmenu', 
+        '.e-popup',
+        '.e-dlg-overlay',
+        '.e-dialog-container'
+      ]
+
+      selectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector)
+        elements.forEach(element => {
+          if (!ganttContainer.contains(element)) {
+            console.log('Moving existing popup to fullscreen:', element.className)
+            try {
+              ganttContainer.appendChild(element)
+            } catch (error) {
+              console.error('Error moving existing popup:', error)
+            }
+          }
+        })
+      })
     },
     
     // 全ての親タスクを展開
@@ -2380,6 +2449,9 @@ export default {
     })
   },
   beforeUnmount() {
+    // フルスクリーンポップアップ監視を停止
+    this.stopFullscreenPopupObserver()
+    
     // フルスクリーンイベントリスナーを削除
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
     document.removeEventListener('mozfullscreenchange', this.handleFullscreenChange)
