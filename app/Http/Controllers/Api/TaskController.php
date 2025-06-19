@@ -50,14 +50,20 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'duration' => 'nullable|integer|min:1',
+            'duration' => 'nullable|integer|min:0',
             'progress' => 'nullable|integer|min:0|max:100',
             'status' => ['nullable', Rule::in(['not_started', 'in_progress', 'completed', 'on_hold', 'cancelled'])],
             'sort_order' => 'nullable|integer',
             'parent_id' => 'nullable|exists:tasks,id',
             'predecessor' => 'nullable|string',
             'assigned_to' => 'nullable|exists:users,id',
+            'is_milestone' => 'nullable|boolean',
         ]);
+        
+        // マイルストーンでない場合のdurationバリデーション
+        if (!($validated['is_milestone'] ?? false) && ($validated['duration'] ?? 0) < 1) {
+            $validated['duration'] = 1; // デフォルトで1日に設定
+        }
 
         // 親タスクが同じプロジェクト内か確認
         if ($validated['parent_id']) {
@@ -104,14 +110,22 @@ class TaskController extends Controller
             'description' => 'nullable|string',
             'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|required|date|after_or_equal:start_date',
-            'duration' => 'nullable|integer|min:1',
+            'duration' => 'nullable|integer|min:0', // マイルストーンの場合は0を許可
             'progress' => 'nullable|integer|min:0|max:100',
             'status' => ['nullable', Rule::in(['not_started', 'in_progress', 'completed', 'on_hold', 'cancelled'])],
             'sort_order' => 'nullable|numeric',
             'parent_id' => 'nullable|exists:tasks,id',
             'predecessor' => 'nullable|string',
             'assigned_to' => 'nullable|exists:users,id',
+            'is_milestone' => 'nullable|boolean',
         ]);
+        
+        // マイルストーンでない場合のdurationバリデーション
+        if (!($validated['is_milestone'] ?? false) && isset($validated['duration']) && $validated['duration'] < 1) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'duration' => ['通常タスクの期間は1日以上である必要があります。']
+            ]);
+        }
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Task update validation failed', [
                 'task_id' => $task->id,

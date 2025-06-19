@@ -221,7 +221,8 @@ export default {
         child: 'subtasks',
         parentID: 'ParentID',
         startDateFormatted: 'StartDateFormatted',
-        endDateFormatted: 'EndDateFormatted'
+        endDateFormatted: 'EndDateFormatted',
+        milestone: 'Milestone'
       },
       editSettings: {
         allowTaskbarEditing: true,
@@ -378,7 +379,8 @@ export default {
           StartDateFormatted: startDate ? 
             `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
           EndDateFormatted: endDate ? 
-            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : ''
+            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : '',
+          Milestone: item.Milestone || item.is_milestone || false
         }
 
         // フラットリストに追加
@@ -436,7 +438,8 @@ export default {
           StartDateFormatted: startDate ? 
             `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
           EndDateFormatted: endDate ? 
-            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : ''
+            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : '',
+          Milestone: item.Milestone || item.is_milestone || false
         }
         
         if (item.subtasks && item.subtasks.length > 0) {
@@ -451,6 +454,7 @@ export default {
     onTaskbarEdited(args) {
     },
     onActionBegin(args) {
+      console.log('ActionBegin:', args.requestType, args)
       
       // タスク追加の場合、重複を防ぐためにキャンセルして独自処理
       if (args.requestType === 'beforeAdd') {
@@ -466,8 +470,15 @@ export default {
         args.cancel = true
         this.deleteTask(args.data[0])
       }
+      
+      // マイルストーン変換やその他の保存処理
+      if (args.requestType === 'beforeSave') {
+        this.handleTaskSave(args)
+      }
     },
     async onActionComplete(args) {
+      console.log('ActionComplete:', args.requestType, args)
+      
       if (args.requestType === 'rowDropped') {
         console.log('Row drop completed:', args)
         
@@ -614,6 +625,53 @@ export default {
         console.error('Error creating task:', error)
       } finally {
         this.isCreatingTask = false
+      }
+    },
+    
+    // タスク保存処理（マイルストーン変換等）
+    async handleTaskSave(args) {
+      console.log('Handling task save:', args.modifiedRecords)
+      
+      // 変更されたタスクがある場合
+      if (args.modifiedRecords && args.modifiedRecords.length > 0) {
+        for (const record of args.modifiedRecords) {
+          try {
+            // マイルストーンフィールドの変更をチェック
+            const isMilestone = record.Milestone || false
+            const updateData = {
+              name: record.TaskName,
+              start_date: record.StartDate ? this.formatDateToLocal(new Date(record.StartDate)) : null,
+              end_date: record.EndDate ? this.formatDateToLocal(new Date(record.EndDate)) : null,
+              duration: isMilestone ? 0 : Math.max(1, record.Duration || 1), // マイルストーンの場合は0、通常タスクは最低1
+              progress: record.Progress || 0,
+              is_milestone: isMilestone
+            }
+            
+            console.log('Updating task:', record.TaskID, updateData)
+            
+            const response = await fetch(`/api/tasks/${record.TaskID}`, {
+              method: 'PUT',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify(updateData)
+            })
+            
+            if (response.ok) {
+              const updatedTask = await response.json()
+              console.log('Task updated successfully:', updatedTask)
+            } else {
+              console.error('Failed to update task:', response.status)
+              const errorData = await response.json()
+              console.error('Error details:', errorData)
+            }
+          } catch (error) {
+            console.error('Error updating task:', error)
+          }
+        }
       }
     },
     async deleteTask(taskData) {
