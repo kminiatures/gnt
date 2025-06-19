@@ -137,6 +137,7 @@
       @actionBegin="onActionBegin"
       @rowDrop="onRowDrop"
       @queryTaskbarInfo="onQueryTaskbarInfo"
+      @created="onGanttCreated"
     >
     </ejs-gantt>
   </div>
@@ -2138,6 +2139,33 @@ export default {
       
       this.weekendHolidays = holidays
       // console.log('Weekend holidays generated:', holidays.length, 'days')
+    },
+
+    // ガントチャート作成完了時の処理
+    onGanttCreated() {
+      console.log('Gantt chart created - ensuring drag functionality is initialized')
+      this.$nextTick(() => {
+        const ganttInstance = this.$refs.gantt
+        if (ganttInstance && ganttInstance.ej2Instances) {
+          const ganttObj = ganttInstance.ej2Instances
+          
+          // ドラッグ機能の状態を確認
+          console.log('allowRowDragAndDrop:', ganttObj.allowRowDragAndDrop)
+          console.log('treeGrid.allowRowDragAndDrop:', ganttObj.treeGrid?.allowRowDragAndDrop)
+          console.log('rowDragAndDropModule exists:', !!ganttObj.treeGrid?.rowDragAndDropModule)
+          
+          // ドラッグ機能を確実に初期化
+          if (ganttObj.allowRowDragAndDrop && ganttObj.treeGrid) {
+            // TreeGridのドラッグ設定を確実に有効化
+            ganttObj.treeGrid.allowRowDragAndDrop = true
+            
+            // ドラッグモジュールが正しく初期化されているか確認
+            if (!ganttObj.treeGrid.rowDragAndDropModule) {
+              console.warn('RowDragAndDrop module not properly initialized')
+            }
+          }
+        }
+      })
     },
 
     // ドラッグ機能を軽量に初期化（refresh()を使わない方法）
