@@ -183,7 +183,7 @@
 </style>
 
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -242,7 +242,6 @@ export default {
         allowEditing: true,
         allowDeleting: true,
         allowDragAndDrop: true,
-        allowResizing: true,
         mode: 'Auto'
       },
       toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel', 'ExpandAll', 'CollapseAll', 'ZoomIn', 'ZoomOut', 'ZoomToFit', 'PrevTimeSpan', 'NextTimeSpan'],
@@ -333,7 +332,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Resize, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers]
   },
   watch: {
     data: {
