@@ -1903,6 +1903,9 @@ export default {
                 node.classList.contains('e-dlg-overlay') ||
                 node.classList.contains('e-dialog-container')
               )
+              
+              // オーバーレイは親要素として作成される場合もあるので、個別チェック
+              const isOverlay = node.classList && node.classList.contains('e-dlg-overlay')
 
               if (isPopup && !ganttContainer.contains(node)) {
                 console.log('Moving popup to fullscreen container:', {
@@ -1926,13 +1929,28 @@ export default {
                   if (node.classList.contains('e-dialog')) {
                     setTimeout(() => {
                       node.style.position = 'fixed'
-                      node.style.zIndex = '9999'
+                      node.style.zIndex = '10002'  // オーバーレイより高く
                       node.style.top = '50%'
                       node.style.left = '50%'
                       node.style.transform = 'translate(-50%, -50%)'
-                      node.style.display = 'block'
+                      node.style.display = 'inline-flex'  // 元の表示タイプを維持
                       node.style.visibility = 'visible'
                       console.log('Applied fixed positioning to dialog')
+                    }, 10)
+                  }
+                  
+                  // オーバーレイの場合、z-indexを調整
+                  if (node.classList.contains('e-dlg-overlay')) {
+                    setTimeout(() => {
+                      node.style.position = 'fixed'
+                      node.style.zIndex = '10001'  // ダイアログより低く
+                      node.style.top = '0'
+                      node.style.left = '0'
+                      node.style.width = '100%'
+                      node.style.height = '100%'
+                      node.style.display = 'block'
+                      node.style.visibility = 'visible'
+                      console.log('Applied fixed positioning to overlay')
                     }, 10)
                   }
                   
@@ -2575,7 +2593,7 @@ export default {
 .gantt-container:-moz-full-screen :deep(.e-dialog),
 .gantt-container:-ms-fullscreen :deep(.e-dialog) {
   position: fixed !important;
-  z-index: 9999 !important;
+  z-index: 10002 !important;
   top: 50% !important;
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
@@ -2608,11 +2626,11 @@ export default {
 .gantt-container:-moz-full-screen :deep(.e-dlg-overlay),
 .gantt-container:-ms-fullscreen :deep(.e-dlg-overlay) {
   position: fixed !important;
-  z-index: 9998 !important;
+  z-index: 10001 !important;
   top: 0 !important;
   left: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* スケールコントロールのスタイル */
