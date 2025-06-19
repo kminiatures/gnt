@@ -129,6 +129,7 @@
       :durationUnit="'Day'"
       :includeWeekend="true"
       :enableContextMenu="true"
+      :holidays="weekendHolidays"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -169,10 +170,19 @@
 :deep(.e-gantt .e-treegridcollapse:hover) {
   color: #333;
 }
+
+/* 週末holidays（土日）のスタイル */
+:deep(.e-gantt .weekend-saturday) {
+  background-color: #f0f8ff !important; /* 薄い青色 */
+}
+
+:deep(.e-gantt .weekend-sunday) {
+  background-color: #ffe6e6 !important; /* 薄い赤色 */
+}
 </style>
 
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -206,6 +216,7 @@ export default {
       isFullscreen: false,
       pendingDropOperation: null,
       isCreatingTask: false,
+      weekendHolidays: [], // 週末holidays用配列
       projectSettings: {
         dateFormat: 'yyyy-MM-dd',
         durationUnit: 'Day'
@@ -320,7 +331,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers]
   },
   watch: {
     data: {
@@ -2102,12 +2113,47 @@ export default {
           args.leftLabel = `${month}/${day}`
         }
       }
+    },
+
+    // 週末holidays（土日の背景色）を生成するメソッド
+    generateWeekendHolidays() {
+      const today = new Date()
+      const currentYear = today.getFullYear()
+      const holidays = []
+      
+      // 今年と来年の週末を生成（1年分）
+      for (let year = currentYear; year <= currentYear + 1; year++) {
+        for (let month = 0; month < 12; month++) {
+          const daysInMonth = new Date(year, month + 1, 0).getDate()
+          
+          for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month, day)
+            const dayOfWeek = date.getDay()
+            
+            // 土曜日(6)と日曜日(0)
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+              holidays.push({
+                from: new Date(year, month, day),
+                to: new Date(year, month, day),
+                label: dayOfWeek === 0 ? '日' : '土',
+                cssClass: dayOfWeek === 0 ? 'weekend-sunday' : 'weekend-saturday'
+              })
+            }
+          }
+        }
+      }
+      
+      this.weekendHolidays = holidays
+      console.log('Weekend holidays generated:', holidays.length, 'days')
     }
   },
   async mounted() {
     
     // ユーザー設定を読み込み
     await this.loadUserOptions()
+    
+    // 週末holidays生成
+    this.generateWeekendHolidays()
     
     // フルスクリーンイベントリスナーを追加
     document.addEventListener('fullscreenchange', this.handleFullscreenChange)
