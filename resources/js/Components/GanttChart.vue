@@ -182,9 +182,7 @@
 </style>
 
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers } from '@syncfusion/ej2-vue-gantt'
-import { Resize } from '@syncfusion/ej2-grids'
-import { Resize as TreeGridResize } from '@syncfusion/ej2-treegrid'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -243,6 +241,7 @@ export default {
         allowEditing: true,
         allowDeleting: true,
         allowDragAndDrop: true,
+        allowResizing: true,
         mode: 'Auto'
       },
       toolbar: ['Add', 'Edit', 'Update', 'Delete', 'Cancel', 'ExpandAll', 'CollapseAll', 'ZoomIn', 'ZoomOut', 'ZoomToFit', 'PrevTimeSpan', 'NextTimeSpan'],
@@ -333,7 +332,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize, TreeGridResize]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize]
   },
   watch: {
     data: {
