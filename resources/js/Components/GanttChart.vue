@@ -138,6 +138,7 @@
       @rowDrop="onRowDrop"
       @queryTaskbarInfo="onQueryTaskbarInfo"
       @created="onGanttCreated"
+      @dataBound="onDataBound"
     >
     </ejs-gantt>
   </div>
@@ -2224,6 +2225,56 @@ export default {
           }
         }
       })
+    },
+
+    // データバインド完了後の処理
+    onDataBound() {
+      console.log('Data bound completed - checking taskbar edit module again')
+      this.$nextTick(() => {
+        const ganttInstance = this.$refs.gantt
+        if (ganttInstance && ganttInstance.ej2Instances) {
+          const ganttObj = ganttInstance.ej2Instances
+          
+          console.log('After data bound - taskbarEditModule exists:', !!ganttObj.taskbarEditModule)
+          
+          // データバインド後にもまだtaskbarEditModuleが存在しない場合
+          if (!ganttObj.taskbarEditModule && ganttObj.editModule) {
+            console.log('Attempting to manually initialize taskbar editing')
+            
+            // Editモジュールから直接タスクバー編集を初期化
+            if (ganttObj.editModule.taskbarEditModule) {
+              ganttObj.taskbarEditModule = ganttObj.editModule.taskbarEditModule
+              console.log('taskbarEditModule assigned from editModule')
+            }
+            
+            // 最後の手段：強制的にタスクバー編集を有効化
+            setTimeout(() => {
+              this.forceEnableTaskbarEditing(ganttObj)
+            }, 200)
+          }
+        }
+      })
+    },
+
+    // タスクバー編集を強制的に有効化
+    forceEnableTaskbarEditing(ganttObj) {
+      console.log('Force enabling taskbar editing')
+      
+      // ガントチャートのタスクバーにマウスイベントを手動で追加
+      const ganttRows = ganttObj.element.querySelectorAll('.e-gantt-chart .e-taskbar-main-container')
+      
+      ganttRows.forEach(taskbar => {
+        // タスクバーにhoverイベントを追加してハンドルを表示
+        taskbar.addEventListener('mouseenter', (e) => {
+          e.target.classList.add('e-active-container')
+        })
+        
+        taskbar.addEventListener('mouseleave', (e) => {
+          e.target.classList.remove('e-active-container')
+        })
+      })
+      
+      console.log('Manual taskbar editing events attached to', ganttRows.length, 'taskbars')
     },
 
     // ドラッグ機能を軽量に初期化（refresh()を使わない方法）
