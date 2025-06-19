@@ -129,6 +129,7 @@
       :durationUnit="'Day'"
       :includeWeekend="true"
       :enableContextMenu="true"
+      :contextMenuItems="['TaskInformation', 'DeleteTask', 'Above', 'Below', 'Child', 'Convert']"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -220,7 +221,8 @@ export default {
         child: 'subtasks',
         parentID: 'ParentID',
         startDateFormatted: 'StartDateFormatted',
-        endDateFormatted: 'EndDateFormatted'
+        endDateFormatted: 'EndDateFormatted',
+        milestone: 'Milestone'
       },
       editSettings: {
         allowTaskbarEditing: true,
@@ -377,7 +379,8 @@ export default {
           StartDateFormatted: startDate ? 
             `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
           EndDateFormatted: endDate ? 
-            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : ''
+            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : '',
+          Milestone: item.Milestone || item.is_milestone || false
         }
 
         // フラットリストに追加
@@ -435,7 +438,8 @@ export default {
           StartDateFormatted: startDate ? 
             `${String(startDate.getMonth() + 1).padStart(2, '0')}/${String(startDate.getDate()).padStart(2, '0')}` : '',
           EndDateFormatted: endDate ? 
-            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : ''
+            `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}` : '',
+          Milestone: item.Milestone || item.is_milestone || false
         }
         
         if (item.subtasks && item.subtasks.length > 0) {

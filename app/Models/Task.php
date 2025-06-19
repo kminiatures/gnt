@@ -24,6 +24,7 @@ class Task extends Model
         'parent_id',
         'predecessor',
         'assigned_to',
+        'is_milestone',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class Task extends Model
         'duration' => 'integer',
         'progress' => 'integer',
         'sort_order' => 'integer',
+        'is_milestone' => 'boolean',
     ];
 
     // リレーション
@@ -162,6 +164,7 @@ class Task extends Model
             'Predecessor' => $this->predecessor,
             'ParentID' => $this->parent_id,
             'sort_order' => $this->sort_order ?? 0,
+            'Milestone' => $this->is_milestone ?? false,
             'subtasks' => $this->children->map(fn($child) => $child->toGanttFormat())->toArray(),
         ];
     }
