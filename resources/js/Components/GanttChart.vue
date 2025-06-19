@@ -497,11 +497,7 @@ export default {
         if (this.pendingDropOperation) {
           const operation = this.pendingDropOperation
           
-          // console.log('Processing pending drop operation:', {
-            droppedTask: operation.droppedTask.TaskName,
-            targetTask: operation.targetTask?.TaskName,
-            dropPosition: operation.dropPosition
-          })
+          // Processing pending drop operation
           
           // API呼び出しでタスクの情報を更新
           await this.updateTaskFromDrop(operation)
@@ -835,13 +831,7 @@ export default {
     
     // タスクが子タスクを持つかどうかをチェック
     hasChildren(task) {
-      // console.log('hasChildren check for task:', task.TaskName, {
-        subtasks: task.subtasks?.length || 0,
-        hasChildRecords: task.hasChildRecords,
-        ganttProperties: task.ganttProperties?.hasChildRecords,
-        childRecords: task.childRecords?.length || 0,
-        taskData: task.taskData?.subtasks?.length || 0
-      })
+      // Checking if task has children
       
       // processedDataから同じTaskIDを持つタスクを検索して子タスクの有無を確認
       const processedTask = this.findTaskInProcessedData(task.TaskID)
@@ -928,12 +918,7 @@ export default {
           sort_order: newSortOrder
         }
         
-        // console.log('Updating dropped task:', {
-          taskName: droppedTask.TaskName,
-          oldParentId,
-          newParentId,
-          newSortOrder
-        })
+        // Updating dropped task with new hierarchy
         
         const response = await fetch(`/api/tasks/${droppedTask.TaskID}`, {
           method: 'PUT',
@@ -1924,11 +1909,7 @@ export default {
           const currentScrollLeft = chartElement ? chartElement.scrollLeft : 0
           const currentScrollTop = chartElement ? chartElement.scrollTop : 0
           
-          // console.log('Preserving zoom state:', {
-            timelineUnitSize: currentTimelineSettings.timelineUnitSize,
-            scrollLeft: currentScrollLeft,
-            scrollTop: currentScrollTop
-          })
+          // Preserving zoom state during scale change
           
           // ラベル設定を更新
           ganttInstance.labelSettings = { ...this.labelSettings }
