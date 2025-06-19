@@ -128,7 +128,7 @@
       :dateFormat="'yyyy-MM-dd'"
       :durationUnit="'Day'"
       :includeWeekend="true"
-      :enableContextMenu="false"
+      :enableContextMenu="true"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -172,7 +172,7 @@
 </style>
 
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -318,7 +318,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu]
   },
   watch: {
     data: {
