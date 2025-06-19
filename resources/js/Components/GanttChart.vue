@@ -465,7 +465,7 @@ export default {
     onTaskbarEdited(args) {
     },
     onActionBegin(args) {
-      console.log('ActionBegin:', args.requestType, args)
+      // console.log('ActionBegin:', args.requestType, args)
       
       // タスク追加の場合、重複を防ぐためにキャンセルして独自処理
       if (args.requestType === 'beforeAdd') {
@@ -488,16 +488,16 @@ export default {
       }
     },
     async onActionComplete(args) {
-      console.log('ActionComplete:', args.requestType, args)
+      // console.log('ActionComplete:', args.requestType, args)
       
       if (args.requestType === 'rowDropped') {
-        console.log('Row drop completed:', args)
+        // console.log('Row drop completed:', args)
         
         // pendingDropOperationがある場合のみ処理
         if (this.pendingDropOperation) {
           const operation = this.pendingDropOperation
           
-          console.log('Processing pending drop operation:', {
+          // console.log('Processing pending drop operation:', {
             droppedTask: operation.droppedTask.TaskName,
             targetTask: operation.targetTask?.TaskName,
             dropPosition: operation.dropPosition
@@ -513,7 +513,7 @@ export default {
       
       // インライン編集（セル編集）時にDBに保存
       if (args.requestType === 'save' && args.action === 'CellEditing') {
-        console.log('Cell editing completed:', args)
+        // console.log('Cell editing completed:', args)
         const task = args.data
         await this.updateTaskFromInlineEdit(task)
       }
@@ -623,7 +623,7 @@ export default {
 
         if (response.ok) {
           const createdTask = await response.json()
-          console.log('Task created successfully:', createdTask)
+          // console.log('Task created successfully:', createdTask)
           
           // ガントチャートのデータを更新
           this.refreshGanttData()
@@ -641,7 +641,7 @@ export default {
     
     // タスク保存処理（マイルストーン変換等）
     async handleTaskSave(args) {
-      console.log('Handling task save:', args.modifiedRecords)
+      // console.log('Handling task save:', args.modifiedRecords)
       
       // 変更されたタスクがある場合
       if (args.modifiedRecords && args.modifiedRecords.length > 0) {
@@ -658,7 +658,7 @@ export default {
               is_milestone: isMilestone
             }
             
-            console.log('Updating task:', record.TaskID, updateData)
+            // console.log('Updating task:', record.TaskID, updateData)
             
             const response = await fetch(`/api/tasks/${record.TaskID}`, {
               method: 'PUT',
@@ -673,7 +673,7 @@ export default {
             
             if (response.ok) {
               const updatedTask = await response.json()
-              console.log('Task updated successfully:', updatedTask)
+              // console.log('Task updated successfully:', updatedTask)
             } else {
               console.error('Failed to update task:', response.status)
               const errorData = await response.json()
@@ -686,7 +686,7 @@ export default {
       }
     },
     async deleteTask(taskData) {
-      console.log('Deleting task:', taskData)
+      // console.log('Deleting task:', taskData)
 
       try {
         const response = await fetch(`/api/tasks/${taskData.TaskID}`, {
@@ -700,7 +700,7 @@ export default {
         })
 
         if (response.ok) {
-          console.log('Task deleted successfully')
+          // console.log('Task deleted successfully')
           
           // ガントチャートのデータを更新
           this.refreshGanttData()
@@ -712,7 +712,7 @@ export default {
       }
     },
     async updateTaskFromInlineEdit(task) {
-      console.log('Updating task from inline edit:', task)
+      // console.log('Updating task from inline edit:', task)
       
       try {
         // タスク名から「+ 」プレフィックスを除去
@@ -734,7 +734,7 @@ export default {
           updateData.duration = parseInt(task.Duration) || 1
         }
         
-        console.log('Sending update data:', updateData)
+        // console.log('Sending update data:', updateData)
         
         const response = await fetch(`/api/tasks/${task.TaskID}`, {
           method: 'PUT',
@@ -749,7 +749,7 @@ export default {
         
         if (response.ok) {
           const result = await response.json()
-          console.log('Task updated successfully from inline edit:', result)
+          // console.log('Task updated successfully from inline edit:', result)
           
           // 親タスクの日付を更新（日付が変更された場合）
           if (updateData.start_date || updateData.end_date) {
@@ -800,7 +800,7 @@ export default {
       this.$emit('refresh-data')
     },
     onRowDrop(args) {
-      console.log('onRowDrop called with args:', args)
+      // console.log('onRowDrop called with args:', args)
       
       const droppedTask = args.data[0]
       const targetTask = args.dropRecord
@@ -808,14 +808,14 @@ export default {
       
       // 自分自身にドロップしようとした場合は無視
       if (droppedTask.TaskID === targetTask?.TaskID) {
-        console.log('Cancelling drop: same task')
+        // console.log('Cancelling drop: same task')
         args.cancel = true
         return
       }
       
       // 循環参照チェック：droppedTaskの子孫にtargetTaskが含まれている場合はキャンセル
       if (this.wouldCreateCircularReference(droppedTask, targetTask, dropPosition)) {
-        console.log('Cancelling drop: would create circular reference')
+        // console.log('Cancelling drop: would create circular reference')
         args.cancel = true
         return
       }
@@ -829,13 +829,13 @@ export default {
         dropIndex: args.dropIndex
       }
       
-      console.log('Drop allowed, will process in actionComplete')
+      // console.log('Drop allowed, will process in actionComplete')
     },
     
     
     // タスクが子タスクを持つかどうかをチェック
     hasChildren(task) {
-      console.log('hasChildren check for task:', task.TaskName, {
+      // console.log('hasChildren check for task:', task.TaskName, {
         subtasks: task.subtasks?.length || 0,
         hasChildRecords: task.hasChildRecords,
         ganttProperties: task.ganttProperties?.hasChildRecords,
@@ -847,7 +847,7 @@ export default {
       const processedTask = this.findTaskInProcessedData(task.TaskID)
       const hasChildrenInProcessedData = processedTask && processedTask.subtasks && processedTask.subtasks.length > 0
       
-      console.log('processedTask found:', processedTask?.TaskName, 'hasSubtasks:', hasChildrenInProcessedData)
+      // console.log('processedTask found:', processedTask?.TaskName, 'hasSubtasks:', hasChildrenInProcessedData)
       
       // Syncfusionガントチャートでは、子タスクはsubtasksまたは別のプロパティに格納される
       const hasChildren = (task.subtasks && task.subtasks.length > 0) ||
@@ -857,7 +857,7 @@ export default {
                          (task.taskData && task.taskData.subtasks && task.taskData.subtasks.length > 0) ||
                          hasChildrenInProcessedData
       
-      console.log('hasChildren result:', hasChildren)
+      // console.log('hasChildren result:', hasChildren)
       return Boolean(hasChildren)  // 明示的にbooleanに変換
     },
     
@@ -928,7 +928,7 @@ export default {
           sort_order: newSortOrder
         }
         
-        console.log('Updating dropped task:', {
+        // console.log('Updating dropped task:', {
           taskName: droppedTask.TaskName,
           oldParentId,
           newParentId,
@@ -948,7 +948,7 @@ export default {
         
         if (response.ok) {
           const result = await response.json()
-          console.log('Task updated successfully:', result)
+          // console.log('Task updated successfully:', result)
           
           // 同レベルの他のタスクのsort_orderも更新
           await this.updateSiblingsSortOrder(newParentId)
@@ -1136,7 +1136,7 @@ export default {
           }
         }, 100)
         
-        console.log('Gantt data source updated efficiently')
+        // console.log('Gantt data source updated efficiently')
         
       } catch (error) {
         console.error('Error in efficient update, falling back to full refresh:', error)
@@ -1213,7 +1213,7 @@ export default {
             }
           }, 200)
           
-          console.log('Gantt data source updated successfully')
+          // console.log('Gantt data source updated successfully')
         } else {
           console.error('Failed to fetch fresh data:', response.status)
           // フォールバックとして完全リロード
@@ -1235,12 +1235,12 @@ export default {
         if (!task.ParentID) {
           const currentOrder = task.sort_order || 0
           maxOrder = Math.max(maxOrder, currentOrder)
-          console.log('Root task:', task.TaskName, 'sort_order:', currentOrder)
+          // console.log('Root task:', task.TaskName, 'sort_order:', currentOrder)
         }
       })
       
       const nextOrder = maxOrder + 1
-      console.log('Next root sort order:', nextOrder, '(max was', maxOrder, ')')
+      // console.log('Next root sort order:', nextOrder, '(max was', maxOrder, ')')
       return nextOrder
     },
     
@@ -1263,9 +1263,9 @@ export default {
     
     // タスクバードラッグ時に日付ラベルを更新
     updateTaskDateLabels(task) {
-      console.log('Updating task date labels for:', task)
-      console.log('Current StartDate:', task.StartDate)
-      console.log('Current EndDate:', task.EndDate)
+      // console.log('Updating task date labels for:', task)
+      // console.log('Current StartDate:', task.StartDate)
+      // console.log('Current EndDate:', task.EndDate)
       
       // フォーマット済み日付を更新
       const startDate = task.StartDate
@@ -1279,8 +1279,8 @@ export default {
         task.EndDateFormatted = `${String(endDate.getMonth() + 1).padStart(2, '0')}/${String(endDate.getDate()).padStart(2, '0')}`
       }
       
-      console.log('New StartDateFormatted:', task.StartDateFormatted)
-      console.log('New EndDateFormatted:', task.EndDateFormatted)
+      // console.log('New StartDateFormatted:', task.StartDateFormatted)
+      // console.log('New EndDateFormatted:', task.EndDateFormatted)
       
       // processedData内の対応するタスクも更新
       const updateProcessedTask = (tasks) => {
@@ -1290,7 +1290,7 @@ export default {
             tasks[i].EndDateFormatted = task.EndDateFormatted
             tasks[i].StartDate = task.StartDate
             tasks[i].EndDate = task.EndDate
-            console.log('Updated processed task date labels:', tasks[i])
+            // console.log('Updated processed task date labels:', tasks[i])
             return true
           }
           
@@ -1305,19 +1305,19 @@ export default {
       
       // 子タスクのラベル更新時はdataSourceの再設定を避ける
       // ラベルのみの更新なので、データソースの再設定は不要
-      console.log('Task date labels updated in processedData')
+      // console.log('Task date labels updated in processedData')
     },
     
     // processedData内の特定タスクを更新
     updateTaskInProcessedData(updatedTask) {
-      console.log('Updating task in processed data:', updatedTask)
+      // console.log('Updating task in processed data:', updatedTask)
       
       const updateTask = (tasks) => {
         for (let i = 0; i < tasks.length; i++) {
           if (tasks[i].TaskID === updatedTask.TaskID) {
             // 既存のタスクデータを更新
             Object.assign(tasks[i], updatedTask)
-            console.log('Updated task in processed data:', tasks[i])
+            // console.log('Updated task in processed data:', tasks[i])
             return true
           }
           
@@ -1368,7 +1368,7 @@ export default {
     
     // 特定タスクのラベルのみを更新（チラつき防止）
     updateTaskLabelsInGantt(taskId) {
-      console.log('Updating task labels in gantt for taskId:', taskId)
+      // console.log('Updating task labels in gantt for taskId:', taskId)
       
       if (!this.$refs.gantt || !this.$refs.gantt.ej2Instances) {
         return
@@ -1387,7 +1387,7 @@ export default {
         // Syncfusionの updateRecordByID を使用してスムーズに更新
         if (ganttInstance.updateRecordByID) {
           ganttInstance.updateRecordByID(taskData)
-          console.log('Task updated using updateRecordByID')
+          // console.log('Task updated using updateRecordByID')
         } else {
           // フォールバック：DOM要素を直接更新
           const taskBarElement = ganttInstance.element.querySelector(`[data-task-id="${taskId}"]`)
@@ -1404,9 +1404,9 @@ export default {
               rightLabelElement.textContent = taskData.EndDateFormatted || ''
             }
             
-            console.log('Task labels updated via DOM manipulation')
+            // console.log('Task labels updated via DOM manipulation')
           } else {
-            console.log('Task bar element not found, will update on next render')
+            // console.log('Task bar element not found, will update on next render')
           }
         }
         
@@ -1418,11 +1418,11 @@ export default {
     // 親タスクの日付を子タスクに基づいて更新
     async updateParentTaskDates(childTask) {
       if (!childTask.ParentID) {
-        console.log('Task has no parent, skipping parent date update')
+        // console.log('Task has no parent, skipping parent date update')
         return
       }
       
-      console.log('Updating parent task dates for child:', childTask)
+      // console.log('Updating parent task dates for child:', childTask)
       
       // 親タスクを見つける
       const findParentTask = (tasks, parentId) => {
@@ -1440,11 +1440,11 @@ export default {
       
       const parentTask = findParentTask(this.processedData, childTask.ParentID)
       if (!parentTask) {
-        console.log('Parent task not found')
+        // console.log('Parent task not found')
         return
       }
       
-      console.log('Found parent task:', parentTask)
+      // console.log('Found parent task:', parentTask)
       
       // 親タスクの全子タスクを取得
       const getAllChildTasks = (parent) => {
@@ -1460,10 +1460,10 @@ export default {
       }
       
       const allChildren = getAllChildTasks(parentTask)
-      console.log('All child tasks:', allChildren)
+      // console.log('All child tasks:', allChildren)
       
       if (allChildren.length === 0) {
-        console.log('No child tasks found')
+        // console.log('No child tasks found')
         return
       }
       
@@ -1484,8 +1484,8 @@ export default {
         }
       }
       
-      console.log('Calculated min start date:', minStartDate)
-      console.log('Calculated max end date:', maxEndDate)
+      // console.log('Calculated min start date:', minStartDate)
+      // console.log('Calculated max end date:', maxEndDate)
       
       // 親タスクの日付を更新
       if (minStartDate || maxEndDate) {
@@ -1547,7 +1547,7 @@ export default {
         for (let i = 0; i < tasks.length; i++) {
           if (tasks[i].TaskID === updatedTask.TaskID) {
             tasks[i] = { ...tasks[i], ...updatedTask }
-            console.log('Updated task in processedData:', tasks[i])
+            // console.log('Updated task in processedData:', tasks[i])
             return true
           }
           
@@ -1629,7 +1629,7 @@ export default {
             
             // 終了日操作の場合はより慎重に更新
             if (isEndDateOperation) {
-              console.log('End date operation - careful dataSource update')
+              // console.log('End date operation - careful dataSource update')
               // 現在のスクロール位置も保持
               const scrollLeft = ganttInstance.ganttChartModule.chartBodyContainer.scrollLeft
               ganttInstance.dataSource = [...this.processedData]
@@ -1723,7 +1723,7 @@ export default {
     
     // スケール変更メソッド
     changeTimelineScale() {
-      console.log('Changing timeline scale to:', this.selectedScale)
+      // console.log('Changing timeline scale to:', this.selectedScale)
       
       const preset = this.scalePresets[this.selectedScale]
       if (preset) {
@@ -1748,7 +1748,7 @@ export default {
     },
     
     changeZoomLevel() {
-      console.log('Changing zoom level to:', this.selectedZoom + '%')
+      // console.log('Changing zoom level to:', this.selectedZoom + '%')
       
       const preset = this.scalePresets[this.selectedScale]
       if (preset) {
@@ -1924,7 +1924,7 @@ export default {
           const currentScrollLeft = chartElement ? chartElement.scrollLeft : 0
           const currentScrollTop = chartElement ? chartElement.scrollTop : 0
           
-          console.log('Preserving zoom state:', {
+          // console.log('Preserving zoom state:', {
             timelineUnitSize: currentTimelineSettings.timelineUnitSize,
             scrollLeft: currentScrollLeft,
             scrollTop: currentScrollTop
@@ -1982,7 +1982,7 @@ export default {
             }
           }
           
-          console.log('Saving user options:', userOptions)
+          // console.log('Saving user options:', userOptions)
           
           const response = await fetch('/api/user-options', {
             method: 'PUT',
@@ -1996,7 +1996,7 @@ export default {
           })
           
           if (response.ok) {
-            console.log('User options saved successfully')
+            // console.log('User options saved successfully')
           } else {
             console.error('Failed to save user options:', response.status)
           }
@@ -2020,7 +2020,7 @@ export default {
         
         if (response.ok) {
           const data = await response.json()
-          console.log('Loaded user options:', data.user_options)
+          // console.log('Loaded user options:', data.user_options)
           
           if (data.user_options && data.user_options.gantt) {
             const ganttOptions = data.user_options.gantt
@@ -2039,7 +2039,7 @@ export default {
             // スケールとズームを適用
             this.changeTimelineScale()
             
-            console.log('User options applied successfully')
+            // console.log('User options applied successfully')
           }
         } else {
           console.error('Failed to load user options:', response.status)
@@ -2144,7 +2144,7 @@ export default {
       }
       
       this.weekendHolidays = holidays
-      console.log('Weekend holidays generated:', holidays.length, 'days')
+      // console.log('Weekend holidays generated:', holidays.length, 'days')
     }
   },
   async mounted() {
@@ -2187,7 +2187,7 @@ export default {
       setTimeout(() => {
         const ganttInstance = this.$refs.gantt
         if (ganttInstance && ganttInstance.ej2Instances) {
-          console.log('Initializing Gantt chart with proper modules...')
+          // console.log('Initializing Gantt chart with proper modules...')
           ganttInstance.refresh()
         }
       }, 100)
