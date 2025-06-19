@@ -2154,6 +2154,12 @@ export default {
           console.log('treeGrid.allowRowDragAndDrop:', ganttObj.treeGrid?.allowRowDragAndDrop)
           console.log('rowDragAndDropModule exists:', !!ganttObj.treeGrid?.rowDragAndDropModule)
           
+          // タスクバー編集機能の状態も確認
+          console.log('allowTaskbarEditing:', ganttObj.editSettings?.allowTaskbarEditing)
+          console.log('editModule exists:', !!ganttObj.editModule)
+          console.log('taskbarEditModule exists:', !!ganttObj.taskbarEditModule)
+          console.log('ganttChartModule exists:', !!ganttObj.ganttChartModule)
+          
           // ドラッグ機能を確実に初期化
           if (ganttObj.allowRowDragAndDrop && ganttObj.treeGrid) {
             // TreeGridのドラッグ設定を確実に有効化
@@ -2179,6 +2185,26 @@ export default {
                 console.log('Drag functionality should now be active')
               }, 100)
             }
+          }
+          
+          // タスクバー編集機能も確実に初期化
+          if (ganttObj.editSettings?.allowTaskbarEditing && ganttObj.editModule) {
+            setTimeout(() => {
+              console.log('Re-initializing taskbar editing functionality')
+              
+              // タスクバー編集機能の再初期化
+              if (ganttObj.taskbarEditModule) {
+                // タスクバー編集モジュールのイベントハンドラーを再アタッチ
+                if (ganttObj.taskbarEditModule.destroy) {
+                  ganttObj.taskbarEditModule.destroy()
+                }
+                if (ganttObj.taskbarEditModule.addEventListener) {
+                  ganttObj.taskbarEditModule.addEventListener()
+                }
+              }
+              
+              console.log('Taskbar editing functionality should now be active')
+            }, 150)
           }
         }
       })
