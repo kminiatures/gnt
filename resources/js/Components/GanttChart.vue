@@ -129,7 +129,6 @@
       :durationUnit="'Day'"
       :includeWeekend="true"
       :enableContextMenu="true"
-      :contextMenuItems="['TaskInformation', 'DeleteTask', 'Above', 'Below', 'Child', 'Convert']"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -206,6 +205,7 @@ export default {
       saveTimeout: null,
       isFullscreen: false,
       pendingDropOperation: null,
+      isCreatingTask: false,
       projectSettings: {
         dateFormat: 'yyyy-MM-dd',
         durationUnit: 'Day'
@@ -454,10 +454,12 @@ export default {
     onTaskbarEdited(args) {
     },
     onActionBegin(args) {
+      console.log('ActionBegin event:', args.requestType, args)
       
-      // タスク追加の場合、一旦キャンセルしてAPIで作成後に反映
+      // タスク追加の場合、重複を防ぐためにキャンセルして独自処理
       if (args.requestType === 'beforeAdd') {
         args.cancel = true
+        console.log('Cancelling Syncfusion add, using custom createTask')
         this.createTask(args.data)
       }
       
@@ -468,6 +470,8 @@ export default {
       }
     },
     async onActionComplete(args) {
+      console.log('ActionComplete event:', args.requestType, args)
+      
       if (args.requestType === 'rowDropped') {
         console.log('Row drop completed:', args)
         
@@ -570,9 +574,18 @@ export default {
       }
     },
     async createTask(taskData) {
+      // 重複実行を防ぐ
+      if (this.isCreatingTask) {
+        console.log('Task creation already in progress, skipping duplicate')
+        return
+      }
+      
+      this.isCreatingTask = true
+      console.log('Starting task creation:', taskData)
       
       if (!this.projectId) {
         console.error('Project ID is required for creating tasks')
+        this.isCreatingTask = false
         return
       }
 
@@ -612,6 +625,9 @@ export default {
         }
       } catch (error) {
         console.error('Error creating task:', error)
+      } finally {
+        this.isCreatingTask = false
+        console.log('Task creation completed, flag reset')
       }
     },
     async deleteTask(taskData) {
