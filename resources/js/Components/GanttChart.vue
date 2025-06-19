@@ -333,7 +333,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize]
+    gantt: [Edit, Resize, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers]
   },
   watch: {
     data: {
@@ -2192,8 +2192,25 @@ export default {
             setTimeout(() => {
               console.log('Re-initializing taskbar editing functionality')
               
-              // タスクバー編集機能の再初期化
-              if (ganttObj.taskbarEditModule) {
+              // タスクバー編集モジュールが存在しない場合は編集機能を強制的に再初期化
+              if (!ganttObj.taskbarEditModule) {
+                console.warn('taskbarEditModule not found, forcing edit module reinitialization')
+                
+                // 編集機能の強制的な再初期化
+                if (ganttObj.editModule && ganttObj.editModule.reRenderEditDialog) {
+                  ganttObj.editModule.reRenderEditDialog()
+                }
+                
+                // ガントチャートの編集機能を再度有効化
+                ganttObj.editSettings.allowTaskbarEditing = true
+                ganttObj.editSettings.allowEditing = true
+                
+                // DOM要素にタスクバー編集のクラスを追加
+                const ganttElement = ganttObj.element
+                if (ganttElement && !ganttElement.classList.contains('e-editable')) {
+                  ganttElement.classList.add('e-editable')
+                }
+              } else {
                 // タスクバー編集モジュールのイベントハンドラーを再アタッチ
                 if (ganttObj.taskbarEditModule.destroy) {
                   ganttObj.taskbarEditModule.destroy()
