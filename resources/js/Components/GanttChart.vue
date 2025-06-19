@@ -1865,9 +1865,49 @@ export default {
       this.$nextTick(() => {
         if (this.$refs.gantt && this.$refs.gantt.ej2Instances) {
           const ganttInstance = this.$refs.gantt.ej2Instances
+          
+          // フルスクリーン時はモーダルやポップアップのコンテナを調整
+          if (isCurrentlyFullscreen) {
+            this.configureFullscreenPopups(ganttInstance)
+          }
+          
           ganttInstance.refresh()
         }
       })
+    },
+    
+    // フルスクリーン時のポップアップ設定
+    configureFullscreenPopups(ganttInstance) {
+      // Syncfusionコンポーネントのポップアップコンテナを設定
+      if (ganttInstance.element) {
+        const ganttContainer = this.$refs.ganttContainer
+        
+        // モーダルやポップアップの親要素をフルスクリーン要素に設定
+        const popupElements = [
+          '.e-dialog-container',
+          '.e-popup-container', 
+          '.e-contextmenu-container'
+        ]
+        
+        popupElements.forEach(selector => {
+          const elements = document.querySelectorAll(selector)
+          elements.forEach(element => {
+            if (element && !ganttContainer.contains(element)) {
+              ganttContainer.appendChild(element)
+            }
+          })
+        })
+        
+        // Syncfusionのポップアップ設定を調整
+        if (ganttInstance.editModule && ganttInstance.editModule.dialogModule) {
+          const dialogModule = ganttInstance.editModule.dialogModule
+          if (dialogModule.dialog) {
+            dialogModule.dialog.target = ganttContainer
+          }
+        }
+        
+        console.log('Configured popups for fullscreen mode')
+      }
     },
     
     // 全ての親タスクを展開
@@ -2415,6 +2455,53 @@ export default {
 
 .gantt-container:-ms-fullscreen :deep(.e-gantt) {
   height: calc(100vh - 200px) !important;
+}
+
+/* フルスクリーン時のモーダル・ポップアップ対応 */
+.fullscreen-mode :deep(.e-dialog),
+.gantt-container:fullscreen :deep(.e-dialog),
+.gantt-container:-webkit-full-screen :deep(.e-dialog),
+.gantt-container:-moz-full-screen :deep(.e-dialog),
+.gantt-container:-ms-fullscreen :deep(.e-dialog) {
+  position: fixed !important;
+  z-index: 9999 !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+/* フルスクリーン時のコンテキストメニュー対応 */
+.fullscreen-mode :deep(.e-contextmenu),
+.gantt-container:fullscreen :deep(.e-contextmenu),
+.gantt-container:-webkit-full-screen :deep(.e-contextmenu),
+.gantt-container:-moz-full-screen :deep(.e-contextmenu),
+.gantt-container:-ms-fullscreen :deep(.e-contextmenu) {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+
+/* フルスクリーン時のドロップダウン対応 */
+.fullscreen-mode :deep(.e-popup),
+.gantt-container:fullscreen :deep(.e-popup),
+.gantt-container:-webkit-full-screen :deep(.e-popup),
+.gantt-container:-moz-full-screen :deep(.e-popup),
+.gantt-container:-ms-fullscreen :deep(.e-popup) {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+
+/* フルスクリーン時のオーバーレイ対応 */
+.fullscreen-mode :deep(.e-dlg-overlay),
+.gantt-container:fullscreen :deep(.e-dlg-overlay),
+.gantt-container:-webkit-full-screen :deep(.e-dlg-overlay),
+.gantt-container:-moz-full-screen :deep(.e-dlg-overlay),
+.gantt-container:-ms-fullscreen :deep(.e-dlg-overlay) {
+  position: fixed !important;
+  z-index: 9998 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
 }
 
 /* スケールコントロールのスタイル */
