@@ -128,7 +128,7 @@
       :dateFormat="'yyyy-MM-dd'"
       :durationUnit="'Day'"
       :includeWeekend="true"
-      :enableContextMenu="false"
+      :enableContextMenu="true"
       height="500px"
       @taskbarEditing="onTaskbarEditing"
       @taskbarEdited="onTaskbarEdited"
@@ -172,7 +172,7 @@
 </style>
 
 <script>
-import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder } from '@syncfusion/ej2-vue-gantt'
+import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu } from '@syncfusion/ej2-vue-gantt'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -205,6 +205,7 @@ export default {
       saveTimeout: null,
       isFullscreen: false,
       pendingDropOperation: null,
+      isCreatingTask: false,
       projectSettings: {
         dateFormat: 'yyyy-MM-dd',
         durationUnit: 'Day'
@@ -318,7 +319,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu]
   },
   watch: {
     data: {
@@ -451,10 +452,13 @@ export default {
     },
     onActionBegin(args) {
       
-      // タスク追加の場合、一旦キャンセルしてAPIで作成後に反映
+      // タスク追加の場合、重複を防ぐためにキャンセルして独自処理
       if (args.requestType === 'beforeAdd') {
         args.cancel = true
-        this.createTask(args.data)
+        if (!this.isCreatingTask) {
+          this.isCreatingTask = true
+          this.createTask(args.data)
+        }
       }
       
       // タスク削除の場合
@@ -608,6 +612,8 @@ export default {
         }
       } catch (error) {
         console.error('Error creating task:', error)
+      } finally {
+        this.isCreatingTask = false
       }
     },
     async deleteTask(taskData) {
