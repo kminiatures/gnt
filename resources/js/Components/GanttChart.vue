@@ -183,6 +183,7 @@
 
 <script>
 import { GanttComponent, Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers } from '@syncfusion/ej2-vue-gantt'
+import { Resize } from '@syncfusion/ej2-grids'
 import { registerLicense } from '@syncfusion/ej2-base'
 
 // Syncfusion license registration
@@ -331,7 +332,7 @@ export default {
     }
   },
   provide: {
-    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers]
+    gantt: [Edit, Toolbar, Selection, RowDD, Sort, Reorder, ContextMenu, DayMarkers, Resize]
   },
   watch: {
     data: {
