@@ -2162,6 +2162,22 @@ export default {
             // ドラッグモジュールが正しく初期化されているか確認
             if (!ganttObj.treeGrid.rowDragAndDropModule) {
               console.warn('RowDragAndDrop module not properly initialized')
+            } else {
+              // DOM要素の準備を少し待ってからイベントハンドラーを再アタッチ
+              setTimeout(() => {
+                const dragModule = ganttObj.treeGrid.rowDragAndDropModule
+                console.log('Re-attaching drag event handlers after DOM ready')
+                
+                // 既存のイベントハンドラーを一度削除してから再アタッチ
+                if (dragModule.removeEventListener) {
+                  dragModule.removeEventListener()
+                }
+                if (dragModule.addEventListener) {
+                  dragModule.addEventListener()
+                }
+                
+                console.log('Drag functionality should now be active')
+              }, 100)
             }
           }
         }
