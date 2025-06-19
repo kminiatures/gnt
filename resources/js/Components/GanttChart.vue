@@ -508,6 +508,17 @@ export default {
         }
       }
       
+      // ツールバーのズーム操作後にドラッグ機能のイベントハンドラーを再アタッチ
+      if (args.requestType === 'zoomIn' || args.requestType === 'zoomOut' || args.requestType === 'zoomToFit') {
+        this.$nextTick(() => {
+          const ganttInstance = this.$refs.gantt
+          if (ganttInstance && ganttInstance.ej2Instances) {
+            // 軽量な方法でドラッグ機能を再初期化
+            this.initializeDragFeature(ganttInstance.ej2Instances)
+          }
+        })
+      }
+      
       // インライン編集（セル編集）時にDBに保存
       if (args.requestType === 'save' && args.action === 'CellEditing') {
         // console.log('Cell editing completed:', args)
@@ -2127,6 +2138,32 @@ export default {
       
       this.weekendHolidays = holidays
       // console.log('Weekend holidays generated:', holidays.length, 'days')
+    },
+
+    // ドラッグ機能を軽量に初期化（refresh()を使わない方法）
+    initializeDragFeature(ganttObj) {
+      try {
+        // ドラッグ機能に関連するプロパティを確実に設定
+        if (ganttObj.allowRowDragAndDrop) {
+          // 既存のDOMイベントハンドラーを再アタッチ
+          const treeGridElement = ganttObj.element.querySelector('.e-treegrid')
+          if (treeGridElement) {
+            // TreeGridのドラッグ機能を再初期化
+            const treeGridInstance = ganttObj.treeGrid
+            if (treeGridInstance && treeGridInstance.rowDragAndDropModule) {
+              // 軽量な再初期化（refresh()なし）
+              treeGridInstance.rowDragAndDropModule.destroy()
+              treeGridInstance.rowDragAndDropModule.addEventListener()
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing drag feature:', error)
+        // フォールバックとして最小限の操作のみ実行
+        if (ganttObj.reorderRows) {
+          ganttObj.reorderRows([])
+        }
+      }
     }
   },
   async mounted() {
@@ -2169,14 +2206,10 @@ export default {
       setTimeout(() => {
         const ganttInstance = this.$refs.gantt
         if (ganttInstance && ganttInstance.ej2Instances) {
-          // ドラッグ&ドロップ機能の初期化を確実にする
-          const ganttObj = ganttInstance.ej2Instances
-          if (ganttObj.allowRowDragAndDrop) {
-            // ドラッグ機能が有効になっていることを確認
-            ganttObj.reorderRows([])  // 空の配列で軽微なreorderを実行して初期化
-          }
+          // 軽量な方法でドラッグ機能を初期化
+          this.initializeDragFeature(ganttInstance.ej2Instances)
         }
-      }, 200)  // 少し長めに待つ
+      }, 200)
     })
   },
   beforeUnmount() {
