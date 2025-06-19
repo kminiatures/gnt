@@ -2192,23 +2192,40 @@ export default {
             setTimeout(() => {
               console.log('Re-initializing taskbar editing functionality')
               
-              // タスクバー編集モジュールが存在しない場合は編集機能を強制的に再初期化
+              // タスクバー編集モジュールが存在しない場合は軽量なrefreshを実行
               if (!ganttObj.taskbarEditModule) {
-                console.warn('taskbarEditModule not found, forcing edit module reinitialization')
+                console.warn('taskbarEditModule not found, performing lightweight refresh')
                 
-                // 編集機能の強制的な再初期化
-                if (ganttObj.editModule && ganttObj.editModule.reRenderEditDialog) {
-                  ganttObj.editModule.reRenderEditDialog()
-                }
-                
-                // ガントチャートの編集機能を再度有効化
-                ganttObj.editSettings.allowTaskbarEditing = true
-                ganttObj.editSettings.allowEditing = true
-                
-                // DOM要素にタスクバー編集のクラスを追加
-                const ganttElement = ganttObj.element
-                if (ganttElement && !ganttElement.classList.contains('e-editable')) {
-                  ganttElement.classList.add('e-editable')
+                try {
+                  // モジュールの再注入のみ実行（破壊的なrefresh()の代替）
+                  if (ganttObj.moduleLoader && ganttObj.injectedModules) {
+                    ganttObj.moduleLoader.inject(ganttObj.requiredModules(), ganttObj.injectedModules)
+                  }
+                  
+                  // 編集設定を強制的に再適用
+                  ganttObj.editSettings = {
+                    ...ganttObj.editSettings,
+                    allowTaskbarEditing: true,
+                    allowEditing: true,
+                    allowDragAndDrop: true
+                  }
+                  
+                  // タスクバー編集機能を手動で再初期化
+                  if (ganttObj.editModule) {
+                    // Editモジュールを一度破壊して再構築
+                    if (ganttObj.editModule.destroy) {
+                      ganttObj.editModule.destroy()
+                    }
+                    if (ganttObj.editModule.addEventListener) {
+                      ganttObj.editModule.addEventListener()
+                    }
+                  }
+                  
+                } catch (error) {
+                  console.error('Error during lightweight refresh:', error)
+                  // 最後の手段として完全なrefresh
+                  console.log('Falling back to full refresh')
+                  ganttObj.refresh()
                 }
               } else {
                 // タスクバー編集モジュールのイベントハンドラーを再アタッチ
