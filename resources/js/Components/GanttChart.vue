@@ -1905,9 +1905,48 @@ export default {
               )
 
               if (isPopup && !ganttContainer.contains(node)) {
-                console.log('Moving popup to fullscreen container:', node.className)
+                console.log('Moving popup to fullscreen container:', {
+                  className: node.className,
+                  tagName: node.tagName,
+                  id: node.id,
+                  style: node.style.cssText,
+                  zIndex: getComputedStyle(node).zIndex
+                })
                 try {
                   ganttContainer.appendChild(node)
+                  // 移動後のスタイル確認
+                  console.log('After move - node styles:', {
+                    display: getComputedStyle(node).display,
+                    position: getComputedStyle(node).position,
+                    zIndex: getComputedStyle(node).zIndex,
+                    visibility: getComputedStyle(node).visibility
+                  })
+                  
+                  // モーダルダイアログの場合、位置とz-indexを強制調整
+                  if (node.classList.contains('e-dialog')) {
+                    setTimeout(() => {
+                      node.style.position = 'fixed'
+                      node.style.zIndex = '9999'
+                      node.style.top = '50%'
+                      node.style.left = '50%'
+                      node.style.transform = 'translate(-50%, -50%)'
+                      node.style.display = 'block'
+                      node.style.visibility = 'visible'
+                      console.log('Applied fixed positioning to dialog')
+                    }, 10)
+                  }
+                  
+                  // コンテキストメニューの場合
+                  if (node.classList.contains('e-contextmenu')) {
+                    setTimeout(() => {
+                      node.style.position = 'fixed'
+                      node.style.zIndex = '9999'
+                      node.style.display = 'block'
+                      node.style.visibility = 'visible'
+                      console.log('Applied fixed positioning to context menu')
+                    }, 10)
+                  }
+                  
                 } catch (error) {
                   console.error('Error moving popup:', error)
                 }
